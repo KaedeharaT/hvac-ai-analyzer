@@ -31,8 +31,8 @@ to achieve robust understanding of HVAC datasets.
 ## System Architecture
 
 <p align="center">
-  <a href="system_architecture.pdf">
-    <img src="system_architecture.png" width="700"/>
+  <a href="overview.pdf">
+    <img src="overview.png" width="700"/>
   </a>
 </p>
 
