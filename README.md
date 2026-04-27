@@ -30,5 +30,12 @@ to achieve robust understanding of HVAC datasets.
 
 ## System Architecture
 
-```text
-Input Data → Semantic Recognition → Physical Validation → HVAC Analysis → Report Output
+<p align="center">
+  <a href="system_architecture.pdf">
+    <img src="system_architecture.png" width="700"/>
+  </a>
+</p>
+
+<p align="center">
+  <em>Click the figure to view high-resolution PDF version.</em>
+</p>
