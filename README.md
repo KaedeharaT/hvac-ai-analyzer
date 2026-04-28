@@ -86,3 +86,22 @@ Input Data → Semantic Recognition → Physical Validation → HVAC Analysis �
 git clone https://github.com/KaedeharaT/hvac-ai-analyzer.git
 cd hvac-ai-analyzer
 
+### 2. Install dependencies
+
+```bash
+pip install pandas numpy matplotlib pyqt5 openpyxl python-docx
+
+### 3. Run the system
+
+```bash
+python main.py
+
+### 4. Usage
+Launch the GUI
+Load your HVAC data (CSV / Excel)
+Select analysis mode (COP / Load Ratio / Column Recognition)
+Run analysis
+Export results (Excel / Word / figures)
+
+
+
