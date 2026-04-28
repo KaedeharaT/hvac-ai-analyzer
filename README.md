@@ -43,3 +43,46 @@ to achieve robust and interpretable understanding of HVAC datasets.
 ---
 
 ## ⚙️ Workflow
+Input Data → Semantic Recognition → Physical Validation → HVAC Analysis → Report Output
+
+---
+
+## 📊 Features
+
+- Automatic HVAC column semantic recognition
+- Multi-source evidence extraction (textual / statistical / unit)
+- LLM-based semantic interpretation
+- Physics-aware consistency validation
+- COP and load ratio analysis
+- Visualization and report generation
+- GUI support (PyQt5)
+
+---
+
+## 🧪 Example Applications
+
+- Building energy performance analysis
+- HVAC system monitoring
+- Data cleaning and semantic alignment for BEMS datasets
+- AI-assisted engineering analysis
+
+---
+
+## 🛠 Tech Stack
+
+- Python
+- Pandas / NumPy
+- PyQt5 (GUI)
+- Matplotlib (Visualization)
+- LLM API (semantic reasoning)
+
+---
+
+## 🚀 Getting Started
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/KaedeharaT/hvac-ai-analyzer.git
+cd hvac-ai-analyzer
+
