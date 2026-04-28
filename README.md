@@ -1,12 +1,12 @@
 # HVAC AI Analyzer
 
-A Python-based intelligent HVAC data analysis system integrating semantic column recognition, physical consistency validation, and energy performance evaluation.
+A Python-based intelligent HVAC data analysis system integrating **semantic column recognition, LLM-assisted reasoning, and physics-aware validation** for building energy performance analysis.
 
 ---
 
-## Overview
+## 🎯 Overview
 
-HVAC AI Analyzer is designed to automate the interpretation and analysis of building operation data (BEMS), reducing manual preprocessing effort and improving reliability.
+HVAC AI Analyzer is designed to automate the interpretation of building operation data (BEMS), reducing manual preprocessing effort and improving reliability.
 
 The system combines:
 
@@ -14,28 +14,32 @@ The system combines:
 - LLM-assisted semantic reasoning
 - Physics-aware validation
 
-to achieve robust understanding of HVAC datasets.
+to achieve robust and interpretable understanding of HVAC datasets.
 
 ---
 
-## Key Contributions
+## 🧠 Key Contributions
 
-- Semantic–physical hybrid reasoning framework
-- C1–C8 multi-slot representation for HVAC variables
-- LLM-based hypothesis generation with constraint validation
-- Automatic COP calculation and energy performance analysis
-- ABSTAIN mechanism for uncertainty handling
+- 🔹 **Semantic–physical hybrid reasoning framework**
+- 🔹 **C1–C8 multi-slot representation for HVAC variables**
+- 🔹 **LLM-based hypothesis generation with constraint validation**
+- 🔹 **Automatic COP calculation and energy performance analysis**
+- 🔹 **ABSTAIN mechanism for uncertainty handling**
 
 ---
 
-## System Architecture
+## 🏗 System Architecture
 
 <p align="center">
-  <a href="overview.pdf">
-    <img src="overview.png" width="700"/>
+  <a href="system_architecture.pdf">
+    <img src="system_architecture.png" width="750"/>
   </a>
 </p>
 
 <p align="center">
   <em>Click the figure to view high-resolution PDF version.</em>
 </p>
+
+---
+
+## ⚙️ Workflow
