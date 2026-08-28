@@ -1,0 +1,5 @@
+{
+  "mode": "frozen_research_c6_sample",
+  "claims_complete_unit_regression": false,
+  "units": {"CH-1_LWT": {"unit": "°C", "unit_type": "temp", "confidence": 0.95}}
+}
