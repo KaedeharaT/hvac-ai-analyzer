@@ -1,0 +1,33 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+settings.json
+*.secret.json
+temp/
+output/
+data/projects/*
+data/timeseries/*
+data/database/*.sqlite*
+data/debug/
+*.parquet
+*.log
+analysis_ui_preview.png
+*api_key*
+screenshots/*.png
+screenshots/*.jpg
+screenshots/*.jpeg
+!data/projects/.gitkeep
+!data/timeseries/.gitkeep
+!data/database/.gitkeep
+!screenshots/.gitkeep
+
+# Local research corpus, archives, imported BEMS exports, and generated media
+# are reference material rather than BuildingAI product source.
+paper_research/
+paper_research_archive_*/
+analysis_ui_preview.png
+.pytest_cache/

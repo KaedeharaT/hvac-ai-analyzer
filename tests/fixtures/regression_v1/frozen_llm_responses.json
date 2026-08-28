@@ -1,0 +1,12 @@
+{
+  "CH-1_LWT": {
+    "C1": {"heat_source": 0.95, "terminal": 0.02, "fan": 0.0},
+    "C2": {"temp": 0.98, "flow": 0.01, "power": 0.0, "energy": 0.0},
+    "C3": {"supply": 0.92, "return": 0.03},
+    "C4": {"stable": 0.8},
+    "C5": {"bundle": 0.9},
+    "C6": {"unit": "°C", "unit_type": "temp", "confidence": 0.95},
+    "C7": {"tag": "heat_source_supply_temp", "confidence": 0.96},
+    "C8": {"physical_validity": 0.96}
+  }
+}

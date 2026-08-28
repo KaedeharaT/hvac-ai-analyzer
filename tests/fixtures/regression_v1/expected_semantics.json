@@ -1,0 +1,16 @@
+{
+  "mode": "product_offline_v1_1",
+  "claims_real_world_equivalence": false,
+  "labels": {
+    "CH-1_LWT": "heat_source_supply_temp",
+    "CH-1_EWT": "heat_source_return_temp",
+    "AHP-1 往水温度": "heat_source_supply_temp",
+    "AHP-1 還水温度": "heat_source_return_temp",
+    "冷冻水流量": "heat_source_flow",
+    "HP01 Power": "heat_source_power",
+    "AHU-01 吹出温度": "terminal_supply_air_temp",
+    "AHU-01 吸込温度": "terminal_return_air_temp",
+    "不明点位": "other"
+  },
+  "status": {"不明点位": "ABSTAIN"}
+}
