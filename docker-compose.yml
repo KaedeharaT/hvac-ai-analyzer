@@ -1,0 +1,13 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+  api:
+    build: .
+    command: python -m uvicorn building_ai.api.app:app --host 0.0.0.0 --port 8000
+    ports: ["8000:8000"]
+    depends_on: [redis]
+  worker:
+    build: .
+    command: python -m building_ai.application.worker
+    depends_on: [redis]
