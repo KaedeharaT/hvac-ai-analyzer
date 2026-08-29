@@ -7,9 +7,9 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]; OUT=ROOT/'artifacts'/'acceptance'/'latest.json'
 if str(ROOT) not in sys.path: sys.path.insert(0,str(ROOT))
 CHECKS={
- 'Background Worker':('building_ai.application.tasks','submit_background'),
+ 'Background Worker':('building_ai.application.tasks','TaskService'),
  'Queue abstraction':('building_ai.application.tasks','TaskService'),
- 'Redis Adapter':None, 'WAITING_REVIEW':None, 'Review Resume':None, 'Retry':None, 'Timeout':None,
+ 'Redis Adapter':None, 'WAITING_REVIEW':('building_ai.application.tasks','TaskService'), 'Review Resume':('building_ai.application.tasks','TaskService'), 'Retry':None, 'Timeout':('building_ai.application.tasks','TaskService'),
  'Planner':('building_ai.agent_runtime','AgentRuntime'), 'Tool Registry':None,
  'Evidence Checker':None, 'Reflection':None, 'Conversation Memory':None, 'Project Memory':None,
  'Cross-project isolation':None, 'RAG Retrieval':None, 'RAG Citation':None,
@@ -17,14 +17,18 @@ CHECKS={
  'Prompt Injection':None, 'Tool Permission':None, 'Secret Redaction':None,
  'FastAPI':('building_ai.api.app','app'), 'PyQt':('building_ai.ui.main_window','MainWindow'),
 }
+TASK_TESTS={'Background Worker','WAITING_REVIEW','Review Resume','Timeout'}
 def main():
  import importlib
  results={}
  for name, target in CHECKS.items():
   if target is None: results[name]={'status':'FAIL','evidence':'no verified production/runtime evidence'}; continue
-  try:
+ try:
    mod=importlib.import_module(target[0]); getattr(mod,target[1]); results[name]={'status':'PASS','evidence':f'{target[0]}.{target[1]} importable'}
   except Exception as exc: results[name]={'status':'FAIL','evidence':str(exc)[:200]}
+  if name in TASK_TESTS and results[name]['status']=='PASS':
+   proof=subprocess.run([sys.executable,'-m','pytest','tests/test_task_state_machine.py'],cwd=ROOT,capture_output=True,text=True)
+   results[name]={'status':'PASS' if proof.returncode==0 else 'FAIL','evidence':'state-machine runtime tests' if proof.returncode==0 else proof.stdout[-200:]}
  test=subprocess.run([sys.executable,'-m','pytest'],cwd=ROOT,capture_output=True,text=True)
  results['pytest']={'status':'PASS' if test.returncode==0 else 'FAIL','evidence':test.stdout.splitlines()[-1] if test.stdout else test.stderr[-200:]}
  counts={x:sum(v['status']==x for v in results.values()) for x in ('PASS','FAIL','ENVIRONMENT_BLOCKED')}
