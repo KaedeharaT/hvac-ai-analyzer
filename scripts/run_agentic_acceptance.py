@@ -10,10 +10,10 @@ CHECKS={
  'Background Worker':('building_ai.application.tasks','TaskService'),
  'Queue abstraction':('building_ai.application.tasks','TaskService'),
  'Redis Adapter':None, 'WAITING_REVIEW':('building_ai.application.tasks','TaskService'), 'Review Resume':('building_ai.application.tasks','TaskService'), 'Retry':None, 'Timeout':('building_ai.application.tasks','TaskService'),
- 'Planner':('building_ai.agent_runtime','AgentRuntime'), 'Tool Registry':None,
- 'Evidence Checker':None, 'Reflection':None, 'Conversation Memory':None, 'Project Memory':None,
+ 'Planner':('building_ai.agent_runtime','AgentRuntime'), 'Tool Registry':('building_ai.agent_registry','ToolRegistry'),
+ 'Evidence Checker':('building_ai.evidence','check_reasoning'), 'Reflection':('building_ai.observability','TraceStore'), 'Conversation Memory':None, 'Project Memory':None,
  'Cross-project isolation':None, 'RAG Retrieval':None, 'RAG Citation':None,
- 'Agent Trace':None, 'Tool Trace':None, 'LLM Trace':None, 'Evaluation':None,
+ 'Agent Trace':('building_ai.observability','TraceStore'), 'Tool Trace':('building_ai.observability','TraceStore'), 'LLM Trace':None, 'Evaluation':None,
  'Prompt Injection':None, 'Tool Permission':None, 'Secret Redaction':None,
  'FastAPI':('building_ai.api.app','app'), 'PyQt':('building_ai.ui.main_window','MainWindow'),
 }
