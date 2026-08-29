@@ -31,3 +31,4 @@ paper_research/
 paper_research_archive_*/
 analysis_ui_preview.png
 .pytest_cache/
+artifacts/
