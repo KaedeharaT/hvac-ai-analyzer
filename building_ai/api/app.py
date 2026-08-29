@@ -22,7 +22,7 @@ def create_app(context=None):
         if not p: raise HTTPException(404,detail=result(error={'code':'PROJECT_NOT_FOUND'}))
         return result({'project_id':p.project_id,'name':p.name,'time_range':p.time_range})
     @app.post('/projects/{project_id}/analysis')
-    def analysis(project_id:str): return result(tasks.submit_analysis(project_id).__dict__)
+    def analysis(project_id:str): return result(tasks.submit_background(project_id).__dict__)
     @app.post('/tasks/{task_id}/run')
     def run(task_id:str): return result(tasks.run(task_id).__dict__)
     @app.get('/tasks/{task_id}')

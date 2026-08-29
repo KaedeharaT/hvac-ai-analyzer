@@ -1,6 +1,7 @@
 """Persistent local task queue; Redis workers can call the same execute method."""
 from __future__ import annotations
 import json, time, uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -19,6 +20,7 @@ class TaskService:
         self.database, self.context = database, context
         with database.connect() as conn:
             conn.execute('CREATE TABLE IF NOT EXISTS application_tasks (task_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, idempotency_key TEXT UNIQUE NOT NULL, payload TEXT NOT NULL)')
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='buildingai-worker')
     def submit_analysis(self, project_id: str) -> Task:
         project=self.context.projects.get(project_id)
         if not project: raise KeyError(project_id)
@@ -29,6 +31,12 @@ class TaskService:
                 return Task(**json.loads(row['payload']))
             item=Task(str(uuid.uuid4()),project_id,key,TaskStatus.PENDING.value,'PENDING',0,datetime.now(timezone.utc).isoformat())
             conn.execute('INSERT INTO application_tasks VALUES (?,?,?,?)',(item.task_id,project_id,key,json.dumps(asdict(item))))
+        return item
+    def submit_background(self, project_id: str) -> Task:
+        """Normal local-development queue path; HTTP returns before analysis."""
+        item=self.submit_analysis(project_id)
+        if item.status == TaskStatus.PENDING.value:
+            self._executor.submit(self.run, item.task_id)
         return item
     def get(self, task_id: str) -> Task|None:
         with self.database.connect() as conn: row=conn.execute('SELECT payload FROM application_tasks WHERE task_id=?',(task_id,)).fetchone()
