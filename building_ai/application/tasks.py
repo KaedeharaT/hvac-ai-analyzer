@@ -84,6 +84,7 @@ class TaskService:
         task.progress=10; task.started_at=datetime.now(timezone.utc).isoformat(); self._save(task)
         started=time.monotonic()
         try:
+            if task.timeout_seconds <= 0: raise TimeoutError('task timeout')
             self.context.open_project(task.project_id)
             for stage, progress in [('EQUIPMENT_DISCOVERY',35),('ENERGY_ANALYSIS',60),('DIAGNOSIS',78),('OPPORTUNITY',90),('VALIDATION',96)]:
                 if time.monotonic()-started > task.timeout_seconds: raise TimeoutError('task timeout')
