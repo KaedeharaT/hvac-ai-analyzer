@@ -82,13 +82,18 @@ class TaskService:
         if task.status in {TaskStatus.SUCCEEDED.value,TaskStatus.WAITING_REVIEW.value}: return task
         if task.status==TaskStatus.PENDING.value: self.transition(task,TaskStatus.RUNNING,'LOAD_DATA')
         task.progress=10; task.started_at=datetime.now(timezone.utc).isoformat(); self._save(task)
+        started=time.monotonic()
         try:
             self.context.open_project(task.project_id)
             for stage, progress in [('EQUIPMENT_DISCOVERY',35),('ENERGY_ANALYSIS',60),('DIAGNOSIS',78),('OPPORTUNITY',90),('VALIDATION',96)]:
+                if time.monotonic()-started > task.timeout_seconds: raise TimeoutError('task timeout')
                 task.stage,task.progress=stage,progress; self._save(task)
             result=self.context.ensure_analysis_results()
             task.result={'project_id':task.project_id,'finding_count':len(result.findings) if result else 0,'status':'current'}
             self.transition(task,TaskStatus.SUCCEEDED,'FINALIZE'); task.progress=100
         except Exception as exc:
-            task.error='ANALYSIS_FAILED'; task.result={'message':str(exc)[:300]}; self.transition(task,TaskStatus.FAILED,'FAILED')
+            task.error='TASK_TIMEOUT' if isinstance(exc,TimeoutError) else 'ANALYSIS_FAILED'; task.result={'message':str(exc)[:300]}
+            if not isinstance(exc,TimeoutError) and task.retry_count < task.max_retries:
+                task.retry_count += 1; task.status=TaskStatus.PENDING.value; task.stage='RETRY'; self._save(task); self.queue.enqueue(self.run,task_id); return task
+            self.transition(task,TaskStatus.FAILED,'FAILED')
         task.finished_at=datetime.now(timezone.utc).isoformat(); self._save(task); return task

@@ -35,6 +35,17 @@ def create_app(context=None):
         item=tasks.get(task_id)
         if not item: raise HTTPException(404,detail=result(error={'code':'TASK_NOT_FOUND'}))
         return result(item.result if item.status=='SUCCEEDED' else None, None if item.status=='SUCCEEDED' else {'code':item.status})
+    @app.get('/tasks/{task_id}/review')
+    def get_review(task_id:str):
+        item=tasks.get(task_id)
+        if not item: raise HTTPException(404,detail=result(error={'code':'TASK_NOT_FOUND'}))
+        return result({'task_id':task_id,'review_required':item.status=='WAITING_REVIEW','review_items':item.review_items or []})
+    @app.post('/tasks/{task_id}/review')
+    def review(task_id:str, payload:dict):
+        item=tasks.get(task_id)
+        if not item: raise HTTPException(404,detail=result(error={'code':'TASK_NOT_FOUND'}))
+        if item.status!='WAITING_REVIEW': raise HTTPException(409,detail=result(error={'code':'TASK_NOT_WAITING_REVIEW'}))
+        return result(tasks.resume_review(task_id).__dict__)
     @app.get('/projects/{project_id}/analysis/latest')
     def latest(project_id:str):
         ctx.ensure_project_loaded(project_id); analysis=ctx.ensure_analysis_results()
