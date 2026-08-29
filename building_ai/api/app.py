@@ -34,4 +34,18 @@ def create_app(context=None):
         item=tasks.get(task_id)
         if not item: raise HTTPException(404,detail=result(error={'code':'TASK_NOT_FOUND'}))
         return result(item.result if item.status=='SUCCEEDED' else None, None if item.status=='SUCCEEDED' else {'code':item.status})
+    @app.get('/projects/{project_id}/analysis/latest')
+    def latest(project_id:str):
+        ctx.ensure_project_loaded(project_id); analysis=ctx.ensure_analysis_results()
+        if not analysis: raise HTTPException(409,detail=result(error={'code':'DATA_NOT_AVAILABLE'}))
+        return result({'project_id':project_id,'finding_count':len(analysis.findings),'opportunity_count':len(ctx.opportunities)})
+    @app.post('/agent/chat')
+    def chat(payload: dict):
+        project_id, message = payload.get('project_id'), str(payload.get('message','')).strip()
+        if not message: raise HTTPException(422,detail=result(error={'code':'VALIDATION_ERROR'}))
+        if project_id: ctx.ensure_project_loaded(project_id)
+        answer=ctx.agent_controller.answer(message)
+        return result({'answer':answer,'project_id':project_id,'tools_used':[],'grounded':bool(project_id),'abstained':answer.startswith('当前项目没有')})
     return app
+
+app = create_app()
