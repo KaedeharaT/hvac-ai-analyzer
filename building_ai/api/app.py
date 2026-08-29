@@ -4,6 +4,7 @@ from building_ai.config import Settings
 from building_ai.ui.context import ApplicationContext
 from building_ai.application.tasks import TaskService
 from building_ai.agent_runtime import AgentRuntime
+from building_ai.observability import TraceStore
 
 def create_app(context=None):
     try:
@@ -58,6 +59,13 @@ def create_app(context=None):
         if project_id: ctx.ensure_project_loaded(project_id)
         response=AgentRuntime(ctx).run(message,project_id)
         return result({**response.model_dump(),'project_id':project_id,'sources':response.sources})
+    @app.get('/traces')
+    def traces(): return result(TraceStore(ctx.database).list())
+    @app.get('/traces/{trace_id}')
+    def trace(trace_id:str):
+        item=TraceStore(ctx.database).get(trace_id)
+        if not item: raise HTTPException(404,detail=result(error={'code':'TRACE_NOT_FOUND'}))
+        return result(item)
     return app
 
 app = create_app()

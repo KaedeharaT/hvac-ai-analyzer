@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel
 from building_ai.evidence import check_reasoning
 from building_ai.agent_registry import ToolRegistry, ProjectArgs
+from building_ai.observability import TraceStore
 
 class Route(BaseModel):
     intent: Literal['general_chat','general_hvac_knowledge','project_summary','energy_analysis','equipment_analysis','diagnosis','recommendation','knowledge_search']
@@ -25,14 +26,19 @@ class AgentRuntime:
         return Plan(steps=[PlanStep(tool=n,arguments={'project_id':pid},purpose=r.intent) for n in names])
     def run(self,q:str,pid:str|None=None)->RuntimeResult:
         if pid:self.context.ensure_project_loaded(pid)
-        r=self.route(q); plan=self.plan(r,pid); evidence={}; registry=ToolRegistry(self.context.agent.tools)
+        r=self.route(q); plan=self.plan(r,pid); evidence={}; registry=ToolRegistry(self.context.agent.tools); events=[]
         for step in plan.steps:
-            x=registry.call(step.tool,ProjectArgs(**step.arguments)); evidence[step.tool]=x.data if x.ok else {'error':x.error}
+            x=registry.call(step.tool,ProjectArgs(**step.arguments)); evidence[step.tool]=x.data if x.ok else {'error':x.error}; events.append({'tool':step.tool,'success':x.ok})
         # A KPI alone never explains a cause.  Re-plan with diagnostic and time
         # evidence under a fixed one-reflection budget.
-        if check_reasoning(evidence, r.intent in {'diagnosis','equipment_analysis'}) .value == 'PARTIAL':
+        initial=check_reasoning(evidence, r.intent in {'diagnosis','equipment_analysis'})
+        reflections=[]
+        if initial.value == 'PARTIAL':
+            reflections.append({'status':'PARTIAL','reason':'KPI evidence needs diagnostic/time-series cause evidence','action':'REPLAN'})
             for name in ('get_diagnostic_findings','get_energy_timeseries'):
                 if name not in evidence:
-                    x=registry.call(name,ProjectArgs(project_id=pid)); evidence[name]=x.data if x.ok else {'error':x.error}; plan.steps.append(PlanStep(tool=name,arguments={'project_id':pid},purpose='reflection evidence'))
+                    x=registry.call(name,ProjectArgs(project_id=pid)); evidence[name]=x.data if x.ok else {'error':x.error}; events.append({'tool':name,'success':x.ok,'replan':True}); plan.steps.append(PlanStep(tool=name,arguments={'project_id':pid},purpose='reflection evidence'))
         answer=self.context.agent_controller.answer(q) if not plan.steps else self.context.agent_controller._grounded_data_answer(q,self.context.agent_controller._equipment_name(q),True,evidence)
-        return RuntimeResult(answer=answer,trace_id=str(uuid.uuid4()),tools_used=[x.tool for x in plan.steps],grounded=bool(plan.steps),abstained=('不足' in answer or '不存在' in answer))
+        trace_id=str(uuid.uuid4()); final=check_reasoning(evidence,r.intent in {'diagnosis','equipment_analysis'}).value
+        TraceStore(self.context.database).save({'trace_id':trace_id,'project_id':pid,'query':q,'intent':r.intent,'plan':[s.model_dump() for s in plan.steps],'tool_calls':events,'evidence_checks':[initial.value,final],'reflections':reflections,'answer':answer,'grounded':bool(plan.steps),'abstained':('不足' in answer or '不存在' in answer),'status':'SUCCEEDED'})
+        return RuntimeResult(answer=answer,trace_id=trace_id,tools_used=[x.tool for x in plan.steps],grounded=bool(plan.steps),abstained=('不足' in answer or '不存在' in answer))
