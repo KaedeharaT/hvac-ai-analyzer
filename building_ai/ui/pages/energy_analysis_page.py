@@ -110,7 +110,18 @@ class EnergyAnalysisPage(QWidget):
         for i, card in enumerate(self.cards.values()): grid.addWidget(card, 0, i)
         self.layout.addLayout(grid)
         self.scroll = QScrollArea(); self.scroll.setWidgetResizable(True); self.scroll.setFrameShape(QFrame.NoFrame)
-        self.content = QWidget(); self.chart_layout = QVBoxLayout(self.content); self.chart_layout.setSpacing(SPACING_MD); self.chart_layout.addStretch(1); self.scroll.setWidget(self.content); self.layout.addWidget(self.scroll, 1)
+        self.content = QWidget()
+        # Charts are intentionally arranged as a responsive desktop grid.  The
+        # service still owns all data and capability decisions; this page only
+        # decides how an available result is presented.
+        self.chart_grid = QGridLayout(self.content)
+        self.chart_grid.setContentsMargins(0, 0, 0, 0)
+        self.chart_grid.setHorizontalSpacing(SPACING_MD)
+        self.chart_grid.setVerticalSpacing(SPACING_MD)
+        self.chart_grid.setColumnStretch(0, 1); self.chart_grid.setColumnStretch(1, 1)
+        # Compatibility alias for integrations that used the older layout name.
+        self.chart_layout = self.chart_grid
+        self.scroll.setWidget(self.content); self.layout.addWidget(self.scroll, 1)
         self.retranslate_ui()
 
     def retranslate_ui(self):
@@ -142,8 +153,8 @@ class EnergyAnalysisPage(QWidget):
         for item in (self.context.equipment_organization.equipment if self.context.equipment_organization else []): self.equipment.addItem(item.name, normalize_equipment_id(item.name))
         self.equipment.setCurrentIndex(max(0, self.equipment.findData(chosen))); self.equipment.blockSignals(False)
         result = self._result()
-        while self.chart_layout.count() > 1:
-            child = self.chart_layout.takeAt(0)
+        while self.chart_grid.count():
+            child = self.chart_grid.takeAt(0)
             if child.widget(): child.widget().deleteLater()
         if result is None:
             self.metadata.setText(tr("energy_no_data")); return
@@ -154,12 +165,31 @@ class EnergyAnalysisPage(QWidget):
         self.cards["cop"].set_value("—" if summary["average_cop"] is None else f"{summary['average_cop']:.2f}")
         self.cards["dt"].set_value("—" if summary["average_delta_t_c"] is None else f"{summary['average_delta_t_c']:.2f} °C")
         selected_chart = self.chart_filter.currentData()
+        row, column = 0, 0
         for code, title_key, kind in self.CHARTS:
             if selected_chart != "all" and code != selected_chart: continue
             payload = result.charts.get(code)
             if not payload: continue
             card = QFrame(); card.setObjectName("Card"); box = QVBoxLayout(card); title = QLabel(tr(title_key)); title.setObjectName("CardTitle"); box.addWidget(title)
             unit = QLabel(payload.get("unit", "")); unit.setObjectName("Muted"); box.addWidget(unit)
-            chart = TimeSeriesChart(kind); chart.set_payload(payload); box.addWidget(chart); self.chart_layout.insertWidget(self.chart_layout.count()-1, card)
+            chart = TimeSeriesChart(kind); chart.set_payload(payload); box.addWidget(chart)
+            # Trends and heatmaps benefit from the full reading width; paired
+            # comparison charts remain side-by-side on ordinary desktop sizes.
+            full_width = code in {"energy_trend", "load_heatmap"}
+            if full_width and column:
+                row += 1; column = 0
+            span = 2 if full_width else 1
+            self.chart_grid.addWidget(card, row, column, 1, span)
+            if full_width:
+                row += 1
+            else:
+                column += 1
+                if column == 2:
+                    row += 1; column = 0
         if result.warnings or q["warnings"]:
-            notice = QLabel(tr("energy_quality_warning", warnings=", ".join([*q["warnings"], *result.warnings][:5]))); notice.setObjectName("Muted"); notice.setWordWrap(True); self.chart_layout.insertWidget(0, notice)
+            notice = QLabel(tr("energy_quality_warning", warnings=", ".join([*q["warnings"], *result.warnings][:5]))); notice.setObjectName("Muted"); notice.setWordWrap(True)
+            # Place quality guidance below the data visuals so it is never
+            # mistaken for a chart or an engineering conclusion.
+            if column:
+                row += 1
+            self.chart_grid.addWidget(notice, row, 0, 1, 2)

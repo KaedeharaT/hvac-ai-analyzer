@@ -3,7 +3,7 @@ from __future__ import annotations
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QButtonGroup, QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton,
-    QStackedWidget, QVBoxLayout, QWidget,
+    QStackedWidget, QVBoxLayout, QWidget, QStyle,
 )
 
 from building_ai.i18n import LanguageManager, tr
@@ -15,6 +15,7 @@ from .pages import (
 )
 from .styles import application_stylesheet
 from .theme import SPACING_LG, SPACING_MD, SPACING_SM
+from .components import StatusBadge
 
 
 class MainWindow(QMainWindow):
@@ -26,6 +27,10 @@ class MainWindow(QMainWindow):
         ("⌘", "equipment", EquipmentPage), ("▤", "energy_analysis", EnergyAnalysisPage), ("▤", "analysis", AnalyticsPage),
         ("✦", "agent", AgentPage), ("⚙", "settings", SettingsPage),
     )
+    NAV_GROUPS = {0: "nav_overview", 1: "nav_data", 5: "nav_analytics", 7: "nav_ai"}
+    NAV_ICONS = (QStyle.SP_DesktopIcon, QStyle.SP_DirIcon, QStyle.SP_DialogOpenButton,
+                 QStyle.SP_FileDialogDetailedView, QStyle.SP_ComputerIcon, QStyle.SP_FileDialogContentsView,
+                 QStyle.SP_MessageBoxInformation, QStyle.SP_DialogHelpButton, QStyle.SP_FileDialogInfoView)
 
     def __init__(self, context: ApplicationContext | None = None):
         super().__init__()
@@ -58,28 +63,32 @@ class MainWindow(QMainWindow):
         self.retranslate_ui()
 
     def _build_sidebar(self) -> QFrame:
-        sidebar = QFrame(); sidebar.setObjectName("Sidebar"); sidebar.setFixedWidth(212)
+        sidebar = QFrame(); sidebar.setObjectName("Sidebar"); sidebar.setFixedWidth(232)
         layout = QVBoxLayout(sidebar); layout.setContentsMargins(SPACING_MD, SPACING_LG, SPACING_MD, SPACING_MD); layout.setSpacing(SPACING_SM)
         self.app_title = QLabel(); self.app_title.setObjectName("AppTitle"); layout.addWidget(self.app_title)
-        self.app_subtitle = QLabel("Building Energy Intelligence"); self.app_subtitle.setObjectName("Muted"); self.app_subtitle.setStyleSheet("color: #94A3B8;")
+        self.app_subtitle = QLabel("Building Energy Intelligence"); self.app_subtitle.setObjectName("SidebarSubtitle")
         layout.addWidget(self.app_subtitle); layout.addSpacing(SPACING_MD)
         self.nav_group = QButtonGroup(self); self.nav_group.setExclusive(True); self.navigation_buttons: list[QPushButton] = []
         for index, (icon, key, _) in enumerate(self.NAVIGATION):
-            button = QPushButton(); button.setObjectName("NavButton"); button.setCheckable(True); button.setMinimumHeight(40)
+            if index in self.NAV_GROUPS:
+                section = QLabel(); section.setObjectName("SidebarSection"); section.setProperty("translation_key", self.NAV_GROUPS[index]); layout.addWidget(section)
+            button = QPushButton(); button.setObjectName("NavButton"); button.setCheckable(True); button.setMinimumHeight(38)
+            button.setIcon(self.style().standardIcon(self.NAV_ICONS[index])); button.setIconSize(button.iconSize())
             button.clicked.connect(lambda checked=False, i=index: self.change_page(i))
             button.setProperty("translation_key", key); button.setProperty("nav_icon", icon)
             self.nav_group.addButton(button); self.navigation_buttons.append(button); layout.addWidget(button)
         layout.addStretch(1)
-        self.sidebar_hint = QLabel("Local-first • Read-only"); self.sidebar_hint.setObjectName("Muted"); self.sidebar_hint.setStyleSheet("color: #94A3B8;")
+        self.sidebar_hint = QLabel("Local-first · Read-only"); self.sidebar_hint.setObjectName("SidebarSubtitle")
         layout.addWidget(self.sidebar_hint)
         return sidebar
 
     def _build_topbar(self) -> QFrame:
         bar = QFrame(); bar.setObjectName("Topbar"); layout = QHBoxLayout(bar); layout.setContentsMargins(SPACING_LG, SPACING_SM, SPACING_LG, SPACING_SM)
-        self.page_title = QLabel(); self.page_title.setObjectName("PageTitle"); layout.addWidget(self.page_title)
+        words = QVBoxLayout(); words.setSpacing(0); self.page_title = QLabel(); self.page_title.setObjectName("PageTitle"); self.page_subtitle = QLabel(); self.page_subtitle.setObjectName("Muted"); words.addWidget(self.page_title); words.addWidget(self.page_subtitle); layout.addLayout(words)
         layout.addStretch(1)
-        self.project_label = QLabel(); self.project_label.setObjectName("StatusLabel"); layout.addWidget(self.project_label)
-        self.llm_label = QLabel(); self.llm_label.setObjectName("StatusLabel"); layout.addWidget(self.llm_label)
+        self.project_label = StatusBadge(); layout.addWidget(self.project_label)
+        self.data_label = StatusBadge(); layout.addWidget(self.data_label)
+        self.llm_label = StatusBadge(); self.llm_label.setCursor(Qt.PointingHandCursor); self.llm_label.mousePressEvent = lambda event: self.change_page(8); layout.addWidget(self.llm_label)
         self.language_button = QPushButton(); self.language_button.clicked.connect(self.toggle_language); layout.addWidget(self.language_button)
         return bar
 
@@ -102,7 +111,9 @@ class MainWindow(QMainWindow):
 
     def update_status(self) -> None:
         project = self.context.current_project
-        self.project_label.setText(f"{tr('current_project')}: {project.name if project else tr('no_project')}")
+        self.project_label.set_status(f"{tr('current_project')}: {project.name if project else tr('no_project')}", "info")
+        ready = bool(self.context.dataframe is not None and not self.context.dataframe.empty)
+        self.data_label.set_status(tr("data_ready") if ready else tr("data_missing"), "success" if ready else "neutral")
         provider = self.context.llm_manager.get_provider()
         if not provider.is_configured:
             detail = tr("not_configured")
@@ -111,7 +122,7 @@ class MainWindow(QMainWindow):
             ok, _ = provider.test_connection(timeout=0.35)
             detail = tr("connected") if ok else tr("connection_error")
             color = "#16A34A" if ok else "#DC2626"
-        self.llm_label.setText(f"{tr('llm')}: {provider.display_name}  <span style='color:{color}'>●</span> {detail}")
+        self.llm_label.set_status(f"{provider.display_name} · {detail}", "success" if provider.is_configured and detail == tr("connected") else "warning" if not provider.is_configured else "critical")
 
     def refresh_pages(self) -> None:
         for page in self.pages:
@@ -123,10 +134,13 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(tr("app_name"))
         self.app_title.setText(tr("app_name"))
         self.language_button.setText("中文" if self.i18n.language == "en_US" else "EN")
+        for label in self.findChildren(QLabel, "SidebarSection"):
+            label.setText(tr(label.property("translation_key")))
         for button in self.navigation_buttons:
-            button.setText(f"{button.property('nav_icon')}  {tr(button.property('translation_key'))}")
+            button.setText(tr(button.property('translation_key')))
         index = self.stack.currentIndex() if hasattr(self, "stack") else 0
         self.page_title.setText(tr(self.NAVIGATION[index][1]))
+        self.page_subtitle.setText(tr("page_subtitle_" + self.NAVIGATION[index][1]) if "page_subtitle_" + self.NAVIGATION[index][1] in {"page_subtitle_dashboard", "page_subtitle_energy_analysis", "page_subtitle_analysis"} else "")
         for page in getattr(self, "pages", []):
             if hasattr(page, "retranslate_ui"):
                 page.retranslate_ui()

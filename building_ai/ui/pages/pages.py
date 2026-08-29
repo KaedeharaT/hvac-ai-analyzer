@@ -24,6 +24,8 @@ from building_ai.ui.theme import SPACING_XS, SPACING_LG, SPACING_MD, SPACING_SM
 from building_ai.ui.analysis_renderer import finding_text, opportunity_impact_text, opportunity_priority_text, opportunity_text, reason_text
 from building_ai.ui.agent_chat import ChatInput, ChatMessage, ChatTranscript, ToolCallWidget
 from building_ai.ui.pages.energy_analysis_page import EnergyAnalysisPage
+from building_ai.ui.pages.energy_analysis_page import TimeSeriesChart
+from building_ai.ui.components import SectionHeader, StatusBadge
 
 
 LOGGER = logging.getLogger(__name__)
@@ -324,20 +326,31 @@ class DashboardPage(BasePage):
         super().__init__(context, "dashboard")
         self.subtitle = QLabel(); self.subtitle.setObjectName("Muted"); self.layout.addWidget(self.subtitle)
         grid = QGridLayout(); grid.setHorizontalSpacing(SPACING_MD); grid.setVerticalSpacing(SPACING_MD)
+        # The dashboard intentionally promotes operational answers rather than
+        # import/semantic implementation details.  The latter stay accessible
+        # from their dedicated pages and technical details panels.
         self.cards = {
-            "project": Card("current_project"), "points": Card("points"), "mapped": Card("mapped"),
-            "equipment": Card("equipment_name"), "range": Card("time_range"), "llm": Card("llm"),
+            "energy": Card("energy_total"), "peak": Card("energy_peak"),
+            "cop": Card("analysis_cop"), "attention": Card("analysis_attention_equipment"),
+            "opportunities": Card("analysis_opportunity_total"),
         }
         for index, card in enumerate(self.cards.values()):
             grid.addWidget(card, index // 3, index % 3)
         self.layout.addLayout(grid)
-        self.summary = QTextEdit(); self.summary.setReadOnly(True); self.summary.setMinimumHeight(170); self.layout.addWidget(self.summary, 1)
+        trend_card = QFrame(); trend_card.setObjectName("ChartCard"); trend_box = QVBoxLayout(trend_card); trend_box.setContentsMargins(SPACING_MD, SPACING_MD, SPACING_MD, SPACING_MD)
+        trend_box.addWidget(SectionHeader(tr("energy_chart_energy"), tr("page_subtitle_energy_analysis")))
+        self.energy_chart = TimeSeriesChart("line"); self.energy_chart.setMinimumHeight(245); trend_box.addWidget(self.energy_chart)
+        self.layout.addWidget(trend_card, 2)
+        lower = QHBoxLayout(); lower.setSpacing(SPACING_MD)
+        self.equipment_status = QFrame(); self.equipment_status.setObjectName("Card"); self.equipment_status_layout = QVBoxLayout(self.equipment_status); self.equipment_status_layout.addWidget(SectionHeader(tr("equipment"), "")); self.equipment_status_layout.addStretch(1)
+        self.action_summary = QTextEdit(); self.action_summary.setReadOnly(True); self.action_summary.setObjectName("Card"); self.action_summary.setMinimumHeight(150)
+        lower.addWidget(self.equipment_status, 1); lower.addWidget(self.action_summary, 1); self.layout.addLayout(lower, 1)
         self.refresh()
 
     def retranslate_ui(self) -> None:
         super().retranslate_ui()
         if hasattr(self, "subtitle"):
-            self.subtitle.setText("AI-assisted building energy and HVAC operational data analysis platform.")
+            self.subtitle.setText(tr("page_subtitle_dashboard"))
         for card in getattr(self, "cards", {}).values(): card.retranslate_ui()
         self.refresh()
 
@@ -347,21 +360,35 @@ class DashboardPage(BasePage):
         counts = {status.value: 0 for status in SemanticStatus}
         if semantics:
             for item in semantics.semantic_results: counts[item.status.value] += 1
-        provider = self.context.llm_manager.get_provider()
-        connected, _ = provider.test_connection(timeout=0.25) if provider.is_configured else (False, "")
-        self.cards["project"].set_value(project.name if project else "—", tr("no_project") if not project else project.building_name or "")
-        self.cards["points"].set_value(f"{energy.summary.get('total_energy_kwh', 0):.1f} kWh" if energy and energy.summary.get("total_energy_kwh") is not None else str(len(semantics.semantic_results) if semantics else 0), tr("energy_total") if energy and energy.summary.get("total_energy_kwh") is not None else tr("semantic_mapping"))
-        self.cards["mapped"].set_value(str(counts["ACCEPT"]), f"{tr('review')}: {counts['REVIEW']} · {tr('abstained')}: {counts['ABSTAIN']}")
+        self.cards["energy"].set_value(f"{energy.summary.get('total_energy_kwh', 0):.1f} kWh" if energy and energy.summary.get("total_energy_kwh") is not None else "—")
         peak = energy.summary.get("peak_power_kw") if energy else None
-        self.cards["equipment"].set_value(f"{peak:.1f} kW" if peak is not None else str(len(self.context.equipment)), tr("energy_peak") if peak is not None else tr("equipment"))
-        date_range = f"{self.context.import_metadata.get('start', '—')} — {self.context.import_metadata.get('end', '—')}"
-        self.cards["range"].set_value(date_range, f"{tr('cop_capability')}: {self.context.cop_status}")
-        state = tr("connected") if connected else tr("not_configured") if not provider.is_configured else tr("connection_error")
-        self.cards["llm"].set_value(provider.display_name, state)
-        lines = [f"{tr('current_project')}: {project.name if project else tr('no_project')}", f"{tr('points')}: {len(semantics.semantic_results) if semantics else 0}"]
-        if energy and energy.summary.get("total_energy_kwh") is not None: lines.append(f"{tr('energy_total')}: {energy.summary['total_energy_kwh']:.1f} kWh")
-        lines += [f"{tr('mapped')} / {tr('review')} / {tr('abstained')}: {counts['ACCEPT']} / {counts['REVIEW']} / {counts['ABSTAIN']}", f"{tr('cop_capability')}: {self.context.cop_status}", f"{tr('llm')}: {provider.display_name} · {state}"]
-        self.summary.setText("\n".join(lines))
+        self.cards["peak"].set_value(f"{peak:.1f} kW" if peak is not None else "—")
+        average_cop = energy.summary.get("average_cop") if energy else None
+        self.cards["cop"].set_value(f"{average_cop:.2f}" if average_cop is not None else "—")
+        diagnosis = self.context.diagnosis_result
+        finding_count = len(diagnosis.findings) if diagnosis else 0
+        self.cards["attention"].set_value(str(len({item.equipment_id for item in diagnosis.findings}) if diagnosis else 0))
+        self.cards["opportunities"].set_value(str(len(self.context.opportunities) if self.context.opportunities else finding_count))
+        metadata = [project.name if project else tr("no_project"), f"{self.context.import_metadata.get('start', '—')} — {self.context.import_metadata.get('end', '—')}"]
+        if semantics:
+            metadata.append(f"{len(semantics.semantic_results)} {tr('points')}")
+        self.subtitle.setText(" · ".join(metadata))
+        chart = energy.charts.get("energy_trend") if energy else None
+        self.energy_chart.set_payload(chart or {})
+        while self.equipment_status_layout.count() > 2:
+            child = self.equipment_status_layout.takeAt(1)
+            if child.widget(): child.widget().deleteLater()
+        findings = {item.equipment_id for item in (self.context.diagnosis_result.findings if self.context.diagnosis_result else [])}
+        if self.context.equipment_organization:
+            for binding in self.context.equipment_organization.heat_sources:
+                row = QHBoxLayout(); row.addWidget(QLabel(binding.equipment.name)); row.addStretch(1)
+                row.addWidget(StatusBadge(tr("analysis_attention_equipment") if binding.equipment_id in findings else tr("analysis_normal_equipment"), "warning" if binding.equipment_id in findings else "success"))
+                holder = QWidget(); holder.setLayout(row); self.equipment_status_layout.insertWidget(self.equipment_status_layout.count() - 1, holder)
+        user_items = getattr(self.context, "user_interpretations", [])
+        if user_items:
+            self.action_summary.setText("\n\n".join(f"{item.problem}\n{item.explanation}\n{tr('recommendation_first_action')}{item.actions[0]}" for item in user_items[:2]))
+        else:
+            self.action_summary.setText(tr("analysis_no_findings"))
 
 
 class ProjectsPage(BasePage):
@@ -372,20 +399,33 @@ class ProjectsPage(BasePage):
         for button, fn in ((self.create_button, self.create), (self.open_button, self.open), (self.rename_button, self.rename), (self.delete_button, self.delete)):
             button.clicked.connect(fn); buttons.addWidget(button)
         buttons.addStretch(1); self.layout.addLayout(buttons)
-        self.list = QListWidget(); self.layout.addWidget(self.list, 1); self.refresh(); self.retranslate_ui()
+        self.list = QTableWidget(0, 5); self.setup_table(self.list); self.layout.addWidget(self.list, 1); self.refresh(); self.retranslate_ui()
 
     def retranslate_ui(self):
         super().retranslate_ui()
         if hasattr(self, "create_button"):
             self.create_button.setText(tr("create")); self.open_button.setText(tr("open")); self.rename_button.setText(tr("rename")); self.delete_button.setText(tr("delete"))
+            self.list.setHorizontalHeaderLabels([tr("project_name_column"), tr("time_range"), tr("project_equipment_count"), tr("project_data_status"), tr("project_last_analysis")])
 
     def refresh(self):
         if not hasattr(self, "list"): return
-        self.list.clear()
-        for project in self.context.projects.list(): self.list.addItem(f"{project.name} | {project.building_name} | {project.project_id}")
+        projects = self.context.projects.list(); self.list.setRowCount(len(projects))
+        for row, project in enumerate(projects):
+            imported = bool(project.source_files)
+            values = [
+                project.name, project.time_range or "—", str(len({item.effective_equipment_id for item in self.context.projects.load_semantics(project.project_id) if item.effective_equipment_id})),
+                tr("data_ready") if imported else tr("data_missing"),
+                project.analysis_summary.get("status", "—") if project.analysis_summary else "—",
+            ]
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(str(value))
+                if column == 0: item.setData(Qt.UserRole, project.project_id)
+                if column in (2, 3, 4): item.setTextAlignment(Qt.AlignCenter)
+                self.list.setItem(row, column, item)
 
     def selected_id(self):
-        item = self.list.currentItem(); return item.text().rsplit(" | ", 1)[-1] if item else None
+        item = self.list.item(self.list.currentRow(), 0) if self.list.currentRow() >= 0 else None
+        return item.data(Qt.UserRole) if item else None
 
     def create(self):
         name, ok = QInputDialog.getText(self, tr("create_project"), tr("project_name"))
@@ -418,7 +458,7 @@ class DataPage(BasePage):
         self.import_button.clicked.connect(lambda: self.import_file("add")); self.replace_button.clicked.connect(lambda: self.import_file("replace")); self.clear_button.clicked.connect(self.clear_data)
         for button in (self.import_button, self.replace_button, self.clear_button): buttons.addWidget(button)
         buttons.addStretch(1); self.layout.addLayout(buttons)
-        self.metadata = QTextEdit(); self.metadata.setReadOnly(True); self.metadata.setMaximumHeight(125); self.layout.addWidget(self.metadata)
+        self.metadata = QTextEdit(); self.metadata.setReadOnly(True); self.metadata.setObjectName("Card"); self.metadata.setMaximumHeight(125); self.layout.addWidget(self.metadata)
         self.preview = QTableWidget(); self.setup_table(self.preview); self.layout.addWidget(self.preview, 1); self.retranslate_ui()
 
     def retranslate_ui(self):
@@ -462,8 +502,15 @@ class DataPage(BasePage):
         if self.context.dataframe is None:
             self.metadata.setText(tr(self.context.data_notice or "no_project_data")); self.preview.setRowCount(0); self.preview.setColumnCount(0); return
         info = self.context.import_metadata
-        summary = {"files": len(info.get("imports", [])), "points": len(self.context.dataframe.columns), "rows": len(self.context.dataframe), "time_range": project.time_range, "data_revision": project.data_revision, "last_import": (info.get("imports") or [{}])[-1].get("imported_at")}
-        self.metadata.setText(json.dumps(summary, indent=2, ensure_ascii=False))
+        latest = (info.get("imports") or [{}])[-1]
+        summary = [
+            tr("import_summary"),
+            f"{tr('import_files')}: {len(info.get('imports', []))}",
+            f"{tr('points')}: {len(self.context.dataframe.columns)} · {tr('import_rows')}: {len(self.context.dataframe):,}",
+            f"{tr('time_range')}: {project.time_range or '—'}",
+            f"{tr('import_last_updated')}: {latest.get('imported_at') or '—'} · {tr('import_revision')}: {project.data_revision}",
+        ]
+        self.metadata.setPlainText("\n".join(summary))
         frame = self.context.dataframe.head(50); self.preview.setRowCount(len(frame)); self.preview.setColumnCount(len(frame.columns)); self.preview.setHorizontalHeaderLabels([str(c) for c in frame.columns])
         for row in range(len(frame)):
             for col in range(len(frame.columns)):
@@ -881,8 +928,8 @@ class AgentPage(BasePage):
         self.send_button.setText(tr("send"))
         self.open_settings_button.setText(tr("open_settings"))
         self.setup_text.setText(tr("agent_llm_not_configured"))
-        self.tools_title.setText(tr("agent_tools", count=len(self.TOOL_IDS)))
-        self.tools_list.setText("\n".join(f"• {tr(f'tool_{tool_id}')}" for tool_id in self.TOOL_IDS))
+        self.tools_title.setText(tr("agent_context_title"))
+        self.tools_list.setText(tr("agent_context_text"))
         self._render_suggestions()
         self.refresh()
 
