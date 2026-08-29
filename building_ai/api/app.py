@@ -3,6 +3,7 @@ from __future__ import annotations
 from building_ai.config import Settings
 from building_ai.ui.context import ApplicationContext
 from building_ai.application.tasks import TaskService
+from building_ai.agent_runtime import AgentRuntime
 
 def create_app(context=None):
     try:
@@ -44,8 +45,8 @@ def create_app(context=None):
         project_id, message = payload.get('project_id'), str(payload.get('message','')).strip()
         if not message: raise HTTPException(422,detail=result(error={'code':'VALIDATION_ERROR'}))
         if project_id: ctx.ensure_project_loaded(project_id)
-        answer=ctx.agent_controller.answer(message)
-        return result({'answer':answer,'project_id':project_id,'tools_used':[],'grounded':bool(project_id),'abstained':answer.startswith('当前项目没有')})
+        response=AgentRuntime(ctx).run(message,project_id)
+        return result({**response.model_dump(),'project_id':project_id,'sources':response.sources})
     return app
 
 app = create_app()
