@@ -23,7 +23,7 @@ def main():
  results={}
  for name, target in CHECKS.items():
   if target is None: results[name]={'status':'FAIL','evidence':'no verified production/runtime evidence'}; continue
- try:
+  try:
    mod=importlib.import_module(target[0]); getattr(mod,target[1]); results[name]={'status':'PASS','evidence':f'{target[0]}.{target[1]} importable'}
   except Exception as exc: results[name]={'status':'FAIL','evidence':str(exc)[:200]}
   if name in TASK_TESTS and results[name]['status']=='PASS':
