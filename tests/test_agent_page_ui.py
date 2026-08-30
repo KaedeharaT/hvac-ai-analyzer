@@ -1,4 +1,6 @@
 import os
+import time
+from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -10,10 +12,14 @@ from PyQt5.QtWidgets import QApplication
 from building_ai.config import Settings
 from building_ai.i18n import LanguageManager
 from building_ai.memory import MemoryStore
+from building_ai.observability import TraceStore
 from building_ai.ui.context import ApplicationContext
-from building_ai.ui.agent_chat import AgentProcessCard
+from building_ai.knowledge import KnowledgeService
+from building_ai.knowledge_catalog import load_materialized_facts, source_registry
+from building_ai.ui.agent_chat import AgentEvidenceCard, AgentProcessCard, AgentSourcesCard
 from building_ai.ui.main_window import MainWindow
 from building_ai.ui.pages.pages import AgentPage
+from building_ai.ui.pages.knowledge_page import KnowledgeBasePage
 
 _APP: QApplication | None = None
 
@@ -143,3 +149,60 @@ def test_agent_process_card_presents_trace_without_internal_tool_names(qapp):
     assert "get_equipment_kpis" not in card.steps.text()
     LanguageManager.instance().set_language("en_US")
     card.close()
+
+
+def test_knowledge_page_uses_real_catalog_summary_search_filters_and_i18n(qapp, configured_context):
+    KnowledgeService(configured_context.database).ingest_catalog(source_registry(), load_materialized_facts())
+    LanguageManager.instance().set_language("en_US")
+    page = KnowledgeBasePage(configured_context); page.show()
+    assert page.cards["knowledge_sources"].value.text() == "19"
+    assert page.cards["knowledge_chunks"].value.text() == "154"
+    assert page.status.text() == "Knowledge Ready"
+    assert page.source_table.rowCount() == 19
+
+    page.query.setText("冷冻水温差低")
+    page.search()
+    assert page._results and page._filtered_results()
+    page.country_filter.setCurrentIndex(page.country_filter.findData("US"))
+    assert all(item["metadata"]["country"] == "US" for item in page._filtered_results())
+    page.country_filter.setCurrentIndex(page.country_filter.findData("all"))
+    page.query.setText("既存建物の省エネ改修")
+    page.search()
+    assert any(item["metadata"]["country"] == "Japan" for item in page._filtered_results())
+
+    LanguageManager.instance().set_language("zh_CN")
+    assert page.heading.text() == "知识库"
+    assert page.search_button.text() == "搜索知识"
+    LanguageManager.instance().set_language("en_US")
+    page.close()
+
+
+def test_citation_card_is_separate_from_project_evidence_and_keeps_ids_technical(qapp):
+    source = {
+        "chunk_id": "catalog:flow-context", "title": "Flow context", "section": "Engineering Principles", "score": 8.25,
+        "metadata": {"organization": "U.S. DOE / NREL", "country": "US", "language": "English", "source_id": "us_energyplus", "official_url": "https://energyplus.net/"},
+    }
+    citations = AgentSourcesCard([source], {"query": "low delta-T", "trace_id": "trace-1"})
+    evidence = AgentEvidenceCard(["AHP-3-3 · COP: 3.94", "Average ΔT: 5.75 °C"])
+    assert citations.title.text() == "Reference material"
+    assert "U.S. DOE / NREL" in citations.source_labels[0].text()
+    assert "catalog:flow-context" not in citations.source_labels[0].text()
+    assert any(button.property("citation_open_button") is True for button in citations.findChildren(type(citations.button)))
+    citations.button.click()
+    assert "catalog:flow-context" in citations.details.toPlainText()
+    assert evidence.title.text() == "Project evidence"
+    citations.close(); evidence.close()
+
+
+def test_agent_page_hides_reference_card_when_runtime_has_no_rag_sources(qapp, configured_context):
+    page = AgentPage(configured_context)
+    trace_id = "no-rag-source"
+    TraceStore(configured_context.database).save({
+        "trace_id": trace_id, "query": "What equipment is in this project?", "intent": "project_summary",
+        "tool_calls": [], "plan": [], "evidence_checks": ["SUFFICIENT"], "reflections": [],
+        "memory_used": [], "knowledge_sources": [], "llm_calls": [], "grounded": True, "status": "SUCCEEDED",
+    })
+    page._request_started = time.monotonic()
+    page._agent_completed(SimpleNamespace(trace_id=trace_id, answer="Equipment summary", grounded=True, sources=[]))
+    assert not any(isinstance(item, AgentSourcesCard) for item in page.transcript.items)
+    page.close()

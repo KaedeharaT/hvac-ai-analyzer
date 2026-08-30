@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, QUrl, pyqtSignal
+from PyQt5.QtGui import QDesktopServices
 import json
 
 from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QTextEdit, QVBoxLayout, QWidget
@@ -152,22 +153,39 @@ class AgentProcessCard(QFrame):
             lines.extend((f"⚠ {tr('agent_need_more_evidence')}", f"✓ {tr('agent_evidence_completed')}"))
         if sources:
             lines.append(f"✓ {tr('agent_knowledge_checked')}")
+        elif any(call.get("tool") == "search_knowledge" for call in calls):
+            lines.append(f"○ {tr('agent_knowledge_not_found')}")
         if not lines: lines.append(f"✓ {tr('agent_completed')}")
         self.steps.setText("\n".join(lines))
 
 
 class AgentSourcesCard(QFrame):
-    """Shows RAG provenance only when the runtime actually retrieved sources."""
+    """Shows actual RAG sources separately from selected-project evidence."""
 
-    def __init__(self, sources: list[dict]):
+    def __init__(self, sources: list[dict], trace: dict | None = None):
         super().__init__(); self.setObjectName("AgentSourcesCard")
-        self.sources = sources
+        self.sources = sources; self.trace = trace or {}
         layout = QVBoxLayout(self); layout.setContentsMargins(SPACING_SM, SPACING_SM, SPACING_SM, SPACING_SM); layout.setSpacing(4)
         self.title = QLabel(); self.title.setObjectName("CardTitle"); layout.addWidget(self.title)
+        self.source_labels: list[QLabel] = []
         for source in sources:
-            label = QLabel(f"• {source.get('citation') or source.get('title')}"); label.setWordWrap(True); layout.addWidget(label)
+            metadata = source.get("metadata", {})
+            holder = QFrame(); holder.setObjectName("KnowledgeCitationRow"); holder_layout = QVBoxLayout(holder); holder_layout.setContentsMargins(5, 4, 5, 4); holder_layout.setSpacing(2)
+            label = QLabel(); label.setWordWrap(True); label.setTextInteractionFlags(Qt.TextSelectableByMouse); label.setProperty("source", source); self.source_labels.append(label); holder_layout.addWidget(label)
+            url = metadata.get("official_url") or source.get("source", "")
+            if isinstance(url, str) and url.startswith(("https://", "http://")):
+                open_button = QPushButton(); open_button.setObjectName("TextButton"); open_button.setProperty("source_url", url); open_button.clicked.connect(lambda checked=False, value=url: QDesktopServices.openUrl(QUrl(value))); holder_layout.addWidget(open_button)
+                open_button.setProperty("citation_open_button", True)
+            layout.addWidget(holder)
         details = QTextEdit(); details.setReadOnly(True); details.setVisible(False); details.setMaximumHeight(120)
-        details.setPlainText("\n\n".join(f"{item.get('title')}\n{item.get('section', '')}\n{item.get('source', '')}" for item in sources))
+        details.setPlainText(json.dumps({
+            "retrieved_query": self.trace.get("query"), "trace_id": self.trace.get("trace_id"),
+            "knowledge_sources": [{"source_id": item.get("metadata", {}).get("source_id"), "chunk_id": item.get("chunk_id"),
+                                   "score": item.get("score"), "section": item.get("section"),
+                                   "official_url": item.get("metadata", {}).get("official_url"),
+                                   "country": item.get("metadata", {}).get("country"), "language": item.get("metadata", {}).get("language")}
+                                  for item in sources],
+        }, ensure_ascii=False, indent=2))
         self.button = QPushButton(); self.button.setObjectName("TextButton")
         def toggle():
             details.setVisible(not details.isVisible()); self.retranslate_ui()
@@ -177,6 +195,16 @@ class AgentSourcesCard(QFrame):
     def retranslate_ui(self) -> None:
         self.title.setText(tr("agent_sources"))
         self.button.setText(tr("agent_hide_source_details") if self.details.isVisible() else tr("agent_view_source_details"))
+        for label in self.source_labels:
+            source = label.property("source") or {}; metadata = source.get("metadata", {})
+            title = source.get("title") or source.get("citation") or "—"
+            organization = metadata.get("organization") or ""
+            section = source.get("section") or ""
+            country = metadata.get("country"); language = metadata.get("language")
+            location = " · ".join(value for value in (tr("knowledge_country_" + country) if country else "", tr("knowledge_language_" + language) if language else "") if value)
+            label.setText("\n".join(value for value in (organization, title, section, location) if value))
+        for button in self.findChildren(QPushButton):
+            if button.property("citation_open_button"): button.setText(tr("knowledge_view_source"))
 
 
 class AgentEvidenceCard(QFrame):
