@@ -241,7 +241,7 @@ The command regenerates curated records, multilingual aliases, portable chunks, 
 python -m pytest
 ```
 
-Current local verification: **105 passed**.
+Current release verification: **110 passed**.
 
 ## Project structure
 

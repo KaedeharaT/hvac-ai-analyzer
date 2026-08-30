@@ -264,7 +264,7 @@ python -m pip install -r requirements-server.txt
 python -m uvicorn building_ai.api.app:app --host 127.0.0.1 --port 8000
 ```
 
-当前本地验证结果：**105 passed**。
+当前 Release 验证结果：**110 passed**。
 
 ## 项目背景与边界
 
