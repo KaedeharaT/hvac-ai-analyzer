@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QTextEdit, QVBoxLayout, QWidget
+import json
+
+from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QTextEdit, QVBoxLayout, QWidget
 
 from building_ai.i18n import LanguageManager, tr
 from building_ai.ui.theme import SPACING_SM
@@ -86,6 +88,109 @@ class ToolCallWidget(QFrame):
         self.icon.setText(icon)
         name = tr(f"tool_{self.tool_id}")
         self.label.setText(f"{tr(key, tool=name)}{(': ' + self.detail) if self.detail else ''}")
+
+
+class AgentProcessCard(QFrame):
+    """Compact user-facing view over the persisted runtime trace."""
+
+    def __init__(self, route=None, plan=None):
+        super().__init__(); self.setObjectName("AgentProcessCard")
+        self.route = route; self.plan = list(getattr(plan, "steps", []) or [])
+        self._completed = False; self._trace: dict = {}; self._elapsed_ms = 0.0
+        layout = QVBoxLayout(self); layout.setContentsMargins(SPACING_SM, SPACING_SM, SPACING_SM, SPACING_SM); layout.setSpacing(5)
+        top = QHBoxLayout(); self.summary = QLabel(); self.summary.setObjectName("AgentProcessSummary")
+        self.toggle = QPushButton(); self.toggle.setObjectName("TextButton"); self.toggle.clicked.connect(self._toggle)
+        top.addWidget(self.summary, 1); top.addWidget(self.toggle); layout.addLayout(top)
+        self.detail = QFrame(); detail_layout = QVBoxLayout(self.detail); detail_layout.setContentsMargins(4, 2, 4, 2); detail_layout.setSpacing(4)
+        self.steps = QLabel(); self.steps.setWordWrap(True); self.steps.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.technical = QTextEdit(); self.technical.setReadOnly(True); self.technical.setVisible(False); self.technical.setMaximumHeight(145)
+        self.technical_toggle = QPushButton(); self.technical_toggle.setObjectName("TextButton"); self.technical_toggle.clicked.connect(self._toggle_technical)
+        detail_layout.addWidget(self.steps); detail_layout.addWidget(self.technical_toggle); detail_layout.addWidget(self.technical)
+        layout.addWidget(self.detail); self.detail.setVisible(False)
+        LanguageManager.instance().language_changed.connect(self.retranslate_ui)
+        self.retranslate_ui()
+
+    @staticmethod
+    def _step_label(tool: str) -> str:
+        return tr(f"agent_step_{tool}")
+
+    def retranslate_ui(self) -> None:
+        self.toggle.setText(tr("agent_view_process") if not self.detail.isVisible() else tr("agent_hide_process"))
+        self.technical_toggle.setText(tr("agent_view_technical") if not self.technical.isVisible() else tr("agent_hide_technical"))
+        if self._completed:
+            self._render_completed()
+        elif self.route:
+            self.summary.setText(tr("agent_analyzing_question"))
+            labels = [self._step_label(getattr(step, "tool", "")) for step in self.plan]
+            self.steps.setText("\n".join(f"● {label}" for label in labels) or tr("agent_understanding"))
+
+    def _toggle(self) -> None:
+        self.detail.setVisible(not self.detail.isVisible()); self.retranslate_ui()
+
+    def _toggle_technical(self) -> None:
+        self.technical.setVisible(not self.technical.isVisible()); self.retranslate_ui()
+
+    def complete(self, trace: dict, elapsed_ms: float) -> None:
+        self._completed = True
+        self._trace = trace; self._elapsed_ms = elapsed_ms
+        self._render_completed()
+        technical = {
+            "intent": trace.get("intent"), "plan": trace.get("plan"), "tool_calls": trace.get("tool_calls", []),
+            "evidence_checks": trace.get("evidence_checks"), "reflections": trace.get("reflections"),
+            "memory_used": trace.get("memory_used"), "knowledge_sources": trace.get("knowledge_sources"),
+            "llm_calls": trace.get("llm_calls"),
+        }
+        self.technical.setPlainText(json.dumps(technical, ensure_ascii=False, indent=2, default=str))
+        self.retranslate_ui()
+
+    def _render_completed(self) -> None:
+        calls = self._trace.get("tool_calls", []); sources = self._trace.get("knowledge_sources", [])
+        successful = sum(bool(call.get("success")) for call in calls if call.get("tool") != "search_knowledge")
+        self.summary.setText(tr("agent_process_complete", tools=successful, sources=len(sources), seconds=self._elapsed_ms / 1000))
+        lines = [f"✓ {self._step_label(call.get('tool', ''))}" if call.get("success") else f"⚠ {tr('agent_partial_data')}" for call in calls]
+        if self._trace.get("reflections"):
+            lines.extend((f"⚠ {tr('agent_need_more_evidence')}", f"✓ {tr('agent_evidence_completed')}"))
+        if sources:
+            lines.append(f"✓ {tr('agent_knowledge_checked')}")
+        if not lines: lines.append(f"✓ {tr('agent_completed')}")
+        self.steps.setText("\n".join(lines))
+
+
+class AgentSourcesCard(QFrame):
+    """Shows RAG provenance only when the runtime actually retrieved sources."""
+
+    def __init__(self, sources: list[dict]):
+        super().__init__(); self.setObjectName("AgentSourcesCard")
+        self.sources = sources
+        layout = QVBoxLayout(self); layout.setContentsMargins(SPACING_SM, SPACING_SM, SPACING_SM, SPACING_SM); layout.setSpacing(4)
+        self.title = QLabel(); self.title.setObjectName("CardTitle"); layout.addWidget(self.title)
+        for source in sources:
+            label = QLabel(f"• {source.get('citation') or source.get('title')}"); label.setWordWrap(True); layout.addWidget(label)
+        details = QTextEdit(); details.setReadOnly(True); details.setVisible(False); details.setMaximumHeight(120)
+        details.setPlainText("\n\n".join(f"{item.get('title')}\n{item.get('section', '')}\n{item.get('source', '')}" for item in sources))
+        self.button = QPushButton(); self.button.setObjectName("TextButton")
+        def toggle():
+            details.setVisible(not details.isVisible()); self.retranslate_ui()
+        self.details = details; self.button.clicked.connect(toggle); layout.addWidget(self.button); layout.addWidget(details)
+        LanguageManager.instance().language_changed.connect(self.retranslate_ui); self.retranslate_ui()
+
+    def retranslate_ui(self) -> None:
+        self.title.setText(tr("agent_sources"))
+        self.button.setText(tr("agent_hide_source_details") if self.details.isVisible() else tr("agent_view_source_details"))
+
+
+class AgentEvidenceCard(QFrame):
+    """Separates selected-project evidence from external knowledge sources."""
+
+    def __init__(self, lines: list[str]):
+        super().__init__(); self.setObjectName("AgentEvidenceCard")
+        layout = QVBoxLayout(self); layout.setContentsMargins(SPACING_SM, SPACING_SM, SPACING_SM, SPACING_SM); layout.setSpacing(3)
+        self.title = QLabel(); self.title.setObjectName("CardTitle"); layout.addWidget(self.title)
+        body = QLabel("\n".join(f"• {line}" for line in lines)); body.setWordWrap(True); body.setTextInteractionFlags(Qt.TextSelectableByMouse); layout.addWidget(body)
+        LanguageManager.instance().language_changed.connect(self.retranslate_ui); self.retranslate_ui()
+
+    def retranslate_ui(self) -> None:
+        self.title.setText(tr("agent_project_evidence"))
 
 
 class ChatTranscript(QFrame):

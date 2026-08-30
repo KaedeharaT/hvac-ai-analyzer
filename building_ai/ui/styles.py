@@ -26,6 +26,10 @@ def application_stylesheet() -> str:
     QLabel#ChatMessageRole {{ color: {c['muted']}; font-size: {FONT_SMALL}px; font-weight: 600; background: transparent; }}
     QLabel#ChatMessageBody {{ background: transparent; }}
     QFrame#ToolCall {{ background: #F8FAFC; border: 1px solid {c['border']}; border-radius: {RADIUS_SM}px; }}
+    QFrame#AgentProcessCard {{ background: #F4F8FF; border: 1px solid #C9D9F8; border-radius: {RADIUS_MD}px; }}
+    QLabel#AgentProcessSummary {{ color: {c['primary']}; font-weight: 650; background: transparent; }}
+    QFrame#AgentEvidenceCard {{ background: #F8FAFC; border: 1px solid {c['border']}; border-radius: {RADIUS_SM}px; }}
+    QFrame#AgentSourcesCard {{ background: #FBFAF6; border: 1px solid #E7DDBD; border-radius: {RADIUS_SM}px; }}
     QFrame#AgentSetupNotice {{ background: #FFFBEB; border: 1px solid #FDE68A; border-radius: {RADIUS_MD}px; }}
     QFrame#AgentSuggestions {{ background: #F8FAFC; border: 1px solid {c['border']}; border-radius: {RADIUS_MD}px; }}
     QLabel#CardValue {{ font-size: {FONT_METRIC}px; font-weight: 700; background: transparent; }}

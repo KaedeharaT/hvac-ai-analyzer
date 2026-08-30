@@ -1,7 +1,7 @@
 # Legacy source inventory
 
 Inventory date: 2026-07-31. Source root:
-`D:\dynamoFile\PythonScript\LLM` (read-only). New root was excluded from all scans.
+`<legacy-source-root>` (read-only). The new product root was excluded from all scans.
 
 | Old file | Purpose | Direct imports | Imported by | Migrate? | New destination | Risk |
 |---|---|---|---|---|---|---|

@@ -22,25 +22,46 @@ class Task:
 
 class LocalTaskQueue:
     def __init__(self, executor): self.executor=executor
-    def enqueue(self, callback, task_id): return self.executor.submit(callback, task_id)
+    def enqueue(self, task_id, callback): return self.executor.submit(callback, task_id)
 
 class RedisTaskQueue:
-    """Optional RQ adapter; local mode remains fully functional without it."""
-    def __init__(self, redis_url):
-        try:
-            import redis
-            from rq import Queue
-        except ImportError as exc: raise RuntimeError('Install redis and rq for RedisTaskQueue') from exc
-        self.queue=Queue(connection=redis.Redis.from_url(redis_url))
-    def enqueue(self, callback, task_id): return self.queue.enqueue(callback, task_id)
+    """RQ adapter that dispatches durable task ids to a separate worker.
+
+    The callback parameter mirrors :class:`LocalTaskQueue`, but must not be
+    serialized: a bound ``TaskService.run`` belongs to the API process.  RQ
+    instead imports the stable worker entry point in its own process.
+    """
+    def __init__(self, redis_url, *, queue_name='building-ai', redis_factory=None, queue_factory=None):
+        if redis_factory is None or queue_factory is None:
+            try:
+                import redis
+                from rq import Queue
+            except ImportError as exc: raise RuntimeError('Install redis and rq for RedisTaskQueue') from exc
+            redis_factory = redis_factory or redis.Redis.from_url
+            queue_factory = queue_factory or Queue
+        self.queue=queue_factory(queue_name, connection=redis_factory(redis_url))
+    def enqueue(self, task_id, callback):
+        # Each attempt is a separate RQ job.  The durable SQLite task id is the
+        # idempotency boundary, so reusing it as RQ's job id would reject retry
+        # jobs while their failed predecessor is still retained by Redis.
+        return self.queue.enqueue('building_ai.application.worker.run_task', task_id)
 
 class TaskService:
     """SQLite-backed service; no GUI/QThread state is used as task storage."""
-    def __init__(self, database, context):
+    def __init__(self, database, context, queue=None):
         self.database, self.context = database, context
         with database.connect() as conn:
             conn.execute('CREATE TABLE IF NOT EXISTS application_tasks (task_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, idempotency_key TEXT UNIQUE NOT NULL, payload TEXT NOT NULL)')
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='buildingai-worker'); self.queue=LocalTaskQueue(self._executor)
+        self._executor = None
+        if queue is not None:
+            self.queue = queue
+        elif getattr(getattr(context, 'settings', None), 'task_queue_backend', 'local') == 'redis':
+            self.queue = RedisTaskQueue(context.settings.redis_url)
+        else:
+            self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='buildingai-worker')
+            self.queue = LocalTaskQueue(self._executor)
+    def _enqueue(self, task_id: str):
+        return self.queue.enqueue(task_id, self.run)
     def submit_analysis(self, project_id: str) -> Task:
         project=self.context.projects.get(project_id)
         if not project: raise KeyError(project_id)
@@ -56,7 +77,7 @@ class TaskService:
         """Normal local-development queue path; HTTP returns before analysis."""
         item=self.submit_analysis(project_id)
         if item.status == TaskStatus.PENDING.value:
-            self.queue.enqueue(self.run, item.task_id)
+            self._enqueue(item.task_id)
         return item
     def get(self, task_id: str) -> Task|None:
         with self.database.connect() as conn: row=conn.execute('SELECT payload FROM application_tasks WHERE task_id=?',(task_id,)).fetchone()
@@ -75,7 +96,7 @@ class TaskService:
     def resume_review(self, task_id: str):
         task=self.get(task_id)
         if not task: raise KeyError(task_id)
-        task.review_items=[]; self.transition(task,TaskStatus.RUNNING,'REVIEW_RESUMED'); self.queue.enqueue(self.run,task_id); return task
+        task.review_items=[]; self.transition(task,TaskStatus.RUNNING,'REVIEW_RESUMED'); self._enqueue(task_id); return task
     def run(self, task_id: str) -> Task:
         task=self.get(task_id)
         if not task: raise KeyError(task_id)
@@ -95,6 +116,6 @@ class TaskService:
         except Exception as exc:
             task.error='TASK_TIMEOUT' if isinstance(exc,TimeoutError) else 'ANALYSIS_FAILED'; task.result={'message':str(exc)[:300]}
             if not isinstance(exc,TimeoutError) and task.retry_count < task.max_retries:
-                task.retry_count += 1; task.status=TaskStatus.PENDING.value; task.stage='RETRY'; self._save(task); self.queue.enqueue(self.run,task_id); return task
+                task.retry_count += 1; task.status=TaskStatus.PENDING.value; task.stage='RETRY'; self._save(task); self._enqueue(task_id); return task
             self.transition(task,TaskStatus.FAILED,'FAILED')
         task.finished_at=datetime.now(timezone.utc).isoformat(); self._save(task); return task

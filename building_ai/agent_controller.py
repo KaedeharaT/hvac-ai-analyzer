@@ -14,7 +14,7 @@ class AgentController:
     def __init__(self, context):
         self.context = context
 
-    def answer(self, message: str, tool_event: Callable[[str, str], None] | None = None) -> str:
+    def answer(self, message: str, tool_event: Callable[[str, str], None] | None = None, llm_event: Callable[[dict], None] | None = None) -> str:
         project = self.context.current_project
         text = message.casefold()
         chinese = LanguageManager.instance().language == "zh_CN"
@@ -23,9 +23,9 @@ class AgentController:
         if identity_question:
             if provider.is_configured:
                 try:
-                    response = provider.generate(
+                    response = self._generate(provider,
                         "Briefly introduce yourself as BuildingAI's read-only BEMS and HVAC analytics assistant. Do not mention project data status.",
-                        system_prompt="Answer in Simplified Chinese only." if chinese else "Answer in English only.", temperature=0,
+                        "Answer in Simplified Chinese only." if chinese else "Answer in English only.", llm_event,
                     ).strip()
                     response = re.sub(r"^\s*ABSTAIN\s*[:：-]?\s*", "", response, flags=re.IGNORECASE)
                     if response:
@@ -51,7 +51,7 @@ class AgentController:
             "冷冻水", "delta t", "δt", "cop", "变流量", "变频", "vfd", "hvac", "暖通", "节能",
         ))
         if not data_question:
-            return self._general_answer(message, chinese, provider, general_engineering)
+            return self._general_answer(message, chinese, provider, general_engineering, llm_event)
         if project is None:
             return "请先打开项目后再查询项目数据。" if chinese else "Please open a project before querying project data."
         if project_question:
@@ -89,7 +89,7 @@ class AgentController:
             # Data questions are deterministically rendered from formal tool
             # evidence.  An LLM is never allowed to override a non-empty result.
             return self._grounded_data_answer(message, equipment, chinese, evidence)
-        return self._general_answer(message, chinese, provider, general_engineering)
+        return self._general_answer(message, chinese, provider, general_engineering, llm_event)
 
     def _grounded_data_answer(self, message: str, equipment: str | None, chinese: bool, evidence: dict) -> str:
         text = message.casefold()
@@ -171,7 +171,7 @@ class AgentController:
         return (f"根据当前项目的正式 KPI，COP 最低的是 {item.equipment_name}，平均 COP 为 {value:.2f}。"
                 if chinese else f"According to the formal current-project KPIs, {item.equipment_name} has the lowest average COP: {value:.2f}.")
 
-    def _general_answer(self, message: str, chinese: bool, provider, engineering: bool) -> str:
+    def _general_answer(self, message: str, chinese: bool, provider, engineering: bool, llm_event: Callable[[dict], None] | None = None) -> str:
         """Answer chat and engineering-knowledge questions without tool gating."""
         if provider.is_configured:
             language = "Simplified Chinese only" if chinese else "English only"
@@ -182,7 +182,7 @@ class AgentController:
             )
             prompt = f"Answer in {language}. {scope}\nUser question: {message}"
             try:
-                response = provider.generate(prompt, system_prompt="You are BuildingAI's helpful, read-only BEMS and HVAC analytics assistant. Do not output ABSTAIN.", temperature=0).strip()
+                response = self._generate(provider, prompt, "You are BuildingAI's helpful, read-only BEMS and HVAC analytics assistant. Do not output ABSTAIN.", llm_event).strip()
                 response = re.sub(r"^\s*ABSTAIN\s*[:：-]?\s*", "", response, flags=re.IGNORECASE)
                 if response and (not chinese or re.search(r"[\u4e00-\u9fff]", response)):
                     return response
@@ -192,6 +192,17 @@ class AgentController:
             return self._general_engineering_fallback(chinese)
         return ("我是 BuildingAI 的 AI 助手。我可以解释软件能力、提供通用 HVAC/能源工程知识，并基于当前项目的真实持久化数据回答设备、能耗、KPI、诊断和节能机会问题。"
                 if chinese else "I am the BuildingAI assistant. I can explain the product, provide general HVAC and energy-engineering guidance, and answer equipment, energy, KPI, diagnosis, and opportunity questions from the selected project's persisted data.")
+
+    @staticmethod
+    def _generate(provider, prompt: str, system_prompt: str, llm_event: Callable[[dict], None] | None) -> str:
+        provider_name=getattr(provider, 'display_name', type(provider).__name__)
+        try:
+            response=provider.generate(prompt, system_prompt=system_prompt, temperature=0)
+        except Exception as exc:
+            if llm_event: llm_event({'provider':provider_name,'operation':'generate','status':'FAILED','error_type':type(exc).__name__})
+            raise
+        if llm_event: llm_event({'provider':provider_name,'operation':'generate','status':'SUCCEEDED'})
+        return response
 
     @staticmethod
     def _general_engineering_fallback(chinese: bool, project_data_unavailable: bool = False) -> str:

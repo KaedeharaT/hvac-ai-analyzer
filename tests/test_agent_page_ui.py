@@ -9,7 +9,9 @@ from PyQt5.QtWidgets import QApplication
 
 from building_ai.config import Settings
 from building_ai.i18n import LanguageManager
+from building_ai.memory import MemoryStore
 from building_ai.ui.context import ApplicationContext
+from building_ai.ui.agent_chat import AgentProcessCard
 from building_ai.ui.main_window import MainWindow
 from building_ai.ui.pages.pages import AgentPage
 
@@ -110,3 +112,34 @@ def test_agent_page_open_settings_navigation(qapp, configured_context):
     page.open_settings()
     assert window.stack.currentIndex() == settings_index
     window.close()
+
+
+def test_agent_focus_is_conversation_scoped_and_cleared_on_project_switch(qapp, configured_context):
+    first = configured_context.projects.create("Project 7")
+    second = configured_context.projects.create("Project 8")
+    configured_context.open_project(first.project_id)
+    page = AgentPage(configured_context); page.refresh()
+    MemoryStore(configured_context.database).put(first.project_id, page._conversation_id, "focus", "equipment", {"equipment_id": "AHP-3-3"})
+    page._refresh_focus()
+    assert "AHP-3-3" in page.focus_status.text()
+
+    configured_context.open_project(second.project_id)
+    page.refresh()
+    assert page.focus_status.text() == ""
+    assert page._conversation_id.startswith(f"gui-{second.project_id}")
+    page.close()
+
+
+def test_agent_process_card_presents_trace_without_internal_tool_names(qapp):
+    LanguageManager.instance().set_language("en_US")
+    card = AgentProcessCard()
+    card.complete({"tool_calls": [{"tool": "get_equipment_kpis", "success": True}, {"tool": "search_knowledge", "success": True}],
+                   "knowledge_sources": [{"title": "Guide"}], "reflections": [{"status": "PARTIAL"}], "intent": "equipment_analysis",
+                   "plan": [], "evidence_checks": ["PARTIAL", "SUFFICIENT"], "memory_used": [], "llm_calls": []}, 1200)
+    assert "data tools" in card.summary.text()
+    assert "get_equipment_kpis" not in card.steps.text()
+    LanguageManager.instance().set_language("zh_CN")
+    assert "分析完成" in card.summary.text()
+    assert "get_equipment_kpis" not in card.steps.text()
+    LanguageManager.instance().set_language("en_US")
+    card.close()
