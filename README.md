@@ -12,7 +12,7 @@ Turn heterogeneous BEMS data into understandable energy insights, equipment diag
 ![Local LLM](https://img.shields.io/badge/LLM-Local%20open--source-6B4FBB)
 ![Agentic AI](https://img.shields.io/badge/AI-Agentic-2563EB)
 ![RAG](https://img.shields.io/badge/Knowledge-RAG-0F766E)
-![Tests](https://img.shields.io/badge/tests-106%20passed-16A34A)
+![Tests](https://img.shields.io/badge/tests-105%20passed-16A34A)
 
 **English | [简体中文](README_zh.md)** · [Architecture](docs/architecture.md) · [Knowledge sources](docs/knowledge_sources.md)
 
@@ -127,9 +127,9 @@ The LLM layer is configurable and model-agnostic. Qwen is currently used as one 
 | Layer | Purpose | Current documented run |
 | --- | --- | --- |
 | **Deterministic Agent Regression Suite** | Fast engineering regression for routing, tool calling, grounding, abstention, memory, RAG retrieval, tool failure, and prompt-injection boundaries. | 66 cases. |
-| **Local LLM End-to-End Evaluation** | Executes the complete bounded Agent path with a locally configured open-source LLM, including tools, evidence checks, RAG where relevant, and final-answer generation. | 52 cases; Qwen2.5-7B test configuration; 44 real LLM calls; average LLM latency 2.94 s. |
+| **Local LLM End-to-End Evaluation** | Executes the complete bounded Agent path with a locally configured open-source LLM, including tools, evidence checks, RAG where relevant, and final-answer generation. | 52 internal cases; Qwen2.5-7B is the documented test configuration. |
 
-The end-to-end suite contains natural-language paraphrases, multi-turn memory, ambiguous requests, missing-data and unknown-equipment abstention, prompt injection, RAG, and tool-degradation cases. During a documented four-round refinement run, routing improved from **58.8% in Round 1** to **100% in Round 4** on that internal run through failure-case analysis. A later fixed 52-case report measured **98.1% task success** and **98.1% tool-selection accuracy**; results are reported as internal measurements, not claims of generalization.
+The end-to-end suite contains natural-language paraphrases, multi-turn memory, ambiguous requests, missing-data and unknown-equipment abstention, prompt injection, RAG, and tool-degradation cases. It is an internal engineering evaluation, not a public benchmark or a claim of generalization to all building projects.
 
 ```powershell
 # Fast deterministic regression
@@ -229,6 +229,8 @@ The command regenerates curated records, multilingual aliases, portable chunks, 
 ```powershell
 python -m pytest
 ```
+
+Current local verification: **105 passed**.
 
 ## Project structure
 

@@ -168,7 +168,7 @@ BuildingAI 使用两层内部评测体系，目的分别是保证工程稳定性
 用户问题 → 本地开源大模型 → Agent → Tool Calling → RAG（需要时）→ 最终回答
 ```
 
-该运行记录了 44 次真实本地模型调用，平均 LLM 延迟约 2.94 秒。评测覆盖自然语言改写、多轮记忆、模糊问题、数据不足、未知设备、RAG、提示注入和工具降级。详细指标应被理解为 BuildingAI 自建内部测试的结果，而不是公开 benchmark 或对所有建筑项目的泛化承诺。
+评测覆盖自然语言改写、多轮记忆、模糊问题、数据不足、未知设备、RAG、提示注入和工具降级。它是 BuildingAI 自建内部工程评测，不是公开 benchmark，也不代表对所有建筑项目的泛化承诺。
 
 ```powershell
 # 确定性 Agent 回归测试
@@ -251,6 +251,8 @@ python scripts/build_knowledge_base.py
 python -m pip install -r requirements-server.txt
 python -m uvicorn building_ai.api.app:app --host 127.0.0.1 --port 8000
 ```
+
+当前本地验证结果：**105 passed**。
 
 ## 项目背景与边界
 
