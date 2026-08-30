@@ -36,4 +36,4 @@ def test_v1_schema_is_migrated_without_losing_review(tmp_path):
     assert item.canonical_label == "heat_source_power"
     assert item.human_label == "other"
     with sqlite3.connect(path) as migrated:
-        assert migrated.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert migrated.execute("PRAGMA user_version").fetchone()[0] == 4

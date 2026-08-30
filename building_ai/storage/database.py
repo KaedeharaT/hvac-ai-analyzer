@@ -9,7 +9,7 @@ from typing import Iterator
 from building_ai.models import make_point_id
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 BASE_SCHEMA = """
 PRAGMA foreign_keys=ON;
@@ -47,6 +47,22 @@ CREATE TABLE IF NOT EXISTS equipment (
 );
 CREATE TABLE IF NOT EXISTS agent_sessions (
     session_id TEXT PRIMARY KEY, project_id TEXT, payload_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS drawings (
+    drawing_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, file_name TEXT NOT NULL,
+    file_type TEXT NOT NULL, page_count INTEGER NOT NULL, managed_path TEXT NOT NULL,
+    model_id TEXT, status TEXT NOT NULL, imported_at TEXT NOT NULL, payload_json TEXT NOT NULL,
+    FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS drawing_detections (
+    detection_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, drawing_id TEXT NOT NULL,
+    page_number INTEGER NOT NULL, class_name TEXT NOT NULL, normalized_class TEXT NOT NULL,
+    original_prediction TEXT NOT NULL, reviewed_class TEXT, confidence REAL NOT NULL,
+    bbox_x1 REAL NOT NULL, bbox_y1 REAL NOT NULL, bbox_x2 REAL NOT NULL, bbox_y2 REAL NOT NULL,
+    image_width INTEGER NOT NULL, image_height INTEGER NOT NULL, model_id TEXT NOT NULL,
+    review_status TEXT NOT NULL, equipment_id TEXT, created_at TEXT NOT NULL,
+    FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE,
+    FOREIGN KEY(drawing_id) REFERENCES drawings(drawing_id) ON DELETE CASCADE
 );
 """
 
