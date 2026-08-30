@@ -33,6 +33,15 @@ def application_stylesheet() -> str:
     QFrame#KnowledgeCitationRow {{ background: #FFFDF6; border: 1px solid #EEE6CF; border-radius: {RADIUS_SM}px; }}
     QFrame#KnowledgeResultCard {{ background: {c['surface']}; border: 1px solid {c['border']}; border-radius: {RADIUS_MD}px; }}
     QLabel#KnowledgeCategoryBadge {{ background: #F1F5F9; color: #475569; border-radius: 10px; padding: 5px 9px; font-size: 11px; font-weight: 600; }}
+    QFrame#KnowledgeSearchHero {{ background: #EEF4FF; border: 1px solid #D9E5FA; border-radius: {RADIUS_LG}px; }}
+    QFrame#KnowledgeMetricCard {{ background: {c['surface']}; border: 1px solid {c['border']}; border-radius: {RADIUS_MD}px; }}
+    QLabel#KnowledgeMetricValue {{ font-size: {FONT_HERO_METRIC}px; font-weight: 700; color: {c['text']}; background: transparent; }}
+    QFrame#KnowledgeSection {{ background: {c['surface']}; border: 1px solid {c['border']}; border-radius: {RADIUS_MD}px; }}
+    QFrame#FeaturedSourceCard {{ background: {c['surface']}; border: 1px solid {c['border']}; border-radius: {RADIUS_MD}px; }}
+    QLabel#FeaturedSourceOrganization {{ color: {c['primary']}; font-size: {FONT_SMALL}px; font-weight: 700; background: transparent; }}
+    QLabel#FeaturedSourceTitle {{ font-size: 14px; font-weight: 650; background: transparent; }}
+    QLabel#KnowledgeMeta {{ color: {c['muted']}; font-size: {FONT_SMALL}px; background: transparent; }}
+    QFrame#KnowledgeSourceBrowser {{ background: {c['surface']}; border: 1px solid {c['border']}; border-radius: {RADIUS_MD}px; }}
     QFrame#AgentSetupNotice {{ background: #FFFBEB; border: 1px solid #FDE68A; border-radius: {RADIUS_MD}px; }}
     QFrame#AgentSuggestions {{ background: #F8FAFC; border: 1px solid {c['border']}; border-radius: {RADIUS_MD}px; }}
     QLabel#CardValue {{ font-size: {FONT_METRIC}px; font-weight: 700; background: transparent; }}
