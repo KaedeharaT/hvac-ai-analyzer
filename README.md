@@ -9,7 +9,7 @@ Turn heterogeneous BEMS data into understandable energy insights, equipment diag
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 ![PyQt5](https://img.shields.io/badge/Desktop-PyQt5-41CD52)
 ![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)
-![Local Qwen](https://img.shields.io/badge/LLM-Local%20Qwen-6B4FBB)
+![Local LLM](https://img.shields.io/badge/LLM-Local%20open--source-6B4FBB)
 ![Agentic AI](https://img.shields.io/badge/AI-Agentic-2563EB)
 ![RAG](https://img.shields.io/badge/Knowledge-RAG-0F766E)
 ![Tests](https://img.shields.io/badge/tests-106%20passed-16A34A)
@@ -74,7 +74,7 @@ The built-in knowledge page provides a friendly entry point to multilingual HVAC
 | **Evidence-grounded diagnostics** | Combines deterministic engineering logic with bounded Agent reasoning so project conclusions are not created from general knowledge alone. |
 | **Actionable recommendations** | Converts findings into understandable operations, maintenance, and energy-saving next steps, with site-validation boundaries. |
 | **AI Assistant** | Supports multi-step analysis, read-only tool use, project-scoped memory, knowledge retrieval, reflection, citations, and trace visibility. |
-| **Pluggable LLMs** | Supports Local Qwen through Ollama plus OpenAI-compatible providers, while core analysis works without an LLM. |
+| **Pluggable LLMs** | Supports local LLM through Ollama plus OpenAI-compatible providers, while core analysis works without an LLM. |
 
 ## Agentic AI in one real workflow
 
@@ -124,8 +124,8 @@ BuildingAI uses a two-layer **internal evaluation suite**, not a public benchmar
 
 | Layer | Purpose | Current documented run |
 | --- | --- | --- |
-| **Deterministic Agent Regression Suite** | Fast engineering regression for routing, tool selection, grounding, abstention, permissions, memory isolation, RAG retrieval, and prompt-injection boundaries. It intentionally has no LLM latency. | 66 cases; 100% routing/tool selection/task success on the internal suite. |
-| **Local-Qwen End-to-End Evaluation** | Executes the complete bounded Agent path with Local Qwen, including tools, evidence checks, reflection, RAG where relevant, and final-answer generation. | 52 cases; `qwen2.5:7b`; 44 real LLM calls; average LLM latency 2.94 s. |
+| **Deterministic Agent Regression Suite** | Fast engineering regression for routing, tool calling, grounding, abstention, memory, RAG retrieval, tool failure, and prompt-injection boundaries. | 66 cases. |
+| **Local LLM End-to-End Evaluation** | Executes the complete bounded Agent path with a locally configured open-source LLM, including tools, evidence checks, RAG where relevant, and final-answer generation. | 52 cases; 44 real LLM calls; average LLM latency 2.94 s. |
 
 The end-to-end suite contains natural-language paraphrases, multi-turn memory, ambiguous requests, missing-data and unknown-equipment abstention, prompt injection, RAG, and tool-degradation cases. During a documented four-round refinement run, routing improved from **58.8% in Round 1** to **100% in Round 4** on that internal run through failure-case analysis. A later fixed 52-case report measured **98.1% task success** and **98.1% tool-selection accuracy**; results are reported as internal measurements, not claims of generalization.
 
@@ -133,7 +133,7 @@ The end-to-end suite contains natural-language paraphrases, multi-turn memory, a
 # Fast deterministic regression
 python scripts/run_agentic_evaluation.py
 
-# Local-Qwen end-to-end smoke / full run
+# Local LLM end-to-end smoke / full run
 python scripts/run_e2e_agent_eval.py --quick
 python scripts/run_e2e_agent_eval.py --full
 ```
@@ -158,7 +158,7 @@ flowchart TB
         ANALYTICS[Energy analytics & diagnostics]
     end
     subgraph AI
-        LLM[Local Qwen / OpenAI-compatible]
+        LLM[local LLM / OpenAI-compatible]
         MEM[Scoped memory]
         RAG[Curated RAG]
         TRACE[Observability & evaluation]
@@ -189,7 +189,7 @@ The desktop UI only presents state and starts workflows. Services orchestrate re
 - Asynchronous task processing with an optional FastAPI service layer
 - Persistent project context, conversation-scoped memory, and source-aware RAG
 - Agent, tool, LLM, and evidence traces for technical inspection
-- Automated deterministic regression and Local-Qwen end-to-end evaluation
+- Automated deterministic regression and local LLM end-to-end evaluation
 - Prompt-injection detection and read-only tool-permission boundaries
 
 ## Quick start
@@ -205,11 +205,7 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-The desktop application works without an LLM. To enable Local Qwen, install [Ollama](https://ollama.com/), pull a model, then select/test it in **Settings**:
-
-```powershell
-ollama pull qwen2.5:7b
-```
+The desktop application works without an LLM. To enable a local open-source LLM, install [Ollama](https://ollama.com/) or use a compatible local endpoint, configure `LLM_MODEL`, and select/test the connection in **Settings**. No model is downloaded or selected by the repository.
 
 ### API
 

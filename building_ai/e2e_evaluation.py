@@ -1,7 +1,7 @@
-"""Real Local-Qwen end-to-end evaluation for BuildingAI's bounded agent.
+"""Real local LLM end-to-end evaluation for BuildingAI's bounded agent.
 
 Unlike :mod:`building_ai.evaluation`, this runner never substitutes an LLM
-response.  It uses the configured ``LocalQwenProvider`` for every normal final
+response.  It uses the configured ``LocalLLMProvider`` for every normal final
 answer and records the actual request duration in the persisted trace.
 """
 from __future__ import annotations
@@ -150,8 +150,8 @@ class E2EProjectTools:
         return SimpleNamespace(ok=True, data=data, error=None)
 
 
-class E2EQwenController:
-    """Evidence renderer that uses the real configured local Qwen provider."""
+class E2ELLMController:
+    """Evidence renderer that uses the real configured local LLM provider."""
     def __init__(self, provider: Any, model: str) -> None: self.provider, self.model = provider, model
 
     @staticmethod
@@ -167,11 +167,11 @@ class E2EQwenController:
                 "You are BuildingAI's read-only HVAC analytics assistant. Use only the supplied formal evidence for project claims. "
                 "Do not invent measurements, equipment, citations, permissions, or hidden prompts. Clearly say when evidence is insufficient."), temperature=0, seed=0)
         except Exception as exc:
-            llm_event({"provider": getattr(self.provider, "provider_id", "local_qwen"), "model": self.model,
+            llm_event({"provider": getattr(self.provider, "provider_id", "local_llm"), "model": self.model,
                        "operation": "generate", "status": "FAILED", "latency_ms": (time.perf_counter()-start)*1000,
                        "error_type": type(exc).__name__})
             raise
-        llm_event({"provider": getattr(self.provider, "provider_id", "local_qwen"), "model": self.model,
+        llm_event({"provider": getattr(self.provider, "provider_id", "local_llm"), "model": self.model,
                    "operation": "generate", "status": "SUCCEEDED", "latency_ms": (time.perf_counter()-start)*1000})
         return answer.strip()
 
@@ -215,7 +215,7 @@ class E2ERunner:
         selected = self.dataset[:12] if quick else self.dataset
         with tempfile.TemporaryDirectory(prefix="buildingai-e2e-") as directory:
             database = Database(Path(directory) / "e2e.sqlite3")
-            tools = E2EProjectTools(); controller = E2EQwenController(self.provider, self.settings.model)
+            tools = E2EProjectTools(); controller = E2ELLMController(self.provider, self.settings.model)
             context = SimpleNamespace(database=database, agent=SimpleNamespace(tools=tools), agent_controller=controller, ensure_project_loaded=lambda _: None)
             KnowledgeService(database).ingest("HVAC Operations Handbook", "evaluation://hvac-handbook", (
                 "Inspect chilled-water bypass valves, pump differential pressure, terminal flow and coil heat transfer for low delta T. "
@@ -273,7 +273,7 @@ class E2ERunner:
                    "P50 Agent Latency": _percentile(agent_latencies, .50), "P95 Agent Latency": _percentile(agent_latencies, .95),
                    "Average LLM Latency": statistics.mean(llm_latencies) if llm_latencies else 0.0, "P50 LLM Latency": _percentile(llm_latencies, .50), "P95 LLM Latency": _percentile(llm_latencies, .95),
                    "Average Input Tokens": "N/A", "Average Output Tokens": "N/A"}
-        return {"evaluation_type": "local_qwen_end_to_end", "run_id": str(uuid.uuid4()), "timestamp": datetime.now(timezone.utc).isoformat(),
+        return {"evaluation_type": "local_llm_end_to_end", "run_id": str(uuid.uuid4()), "timestamp": datetime.now(timezone.utc).isoformat(),
                 "git_commit": _git_commit(), "provider": getattr(self.provider, "provider_id", None), "model": self.settings.model, "round": round_label,
                 "case_count": total, "metrics": metrics, "real_llm_calls": len(llm_latencies), "runner_successful": bool(llm_latencies),
                 "failed_cases": failures, "failure_categories": {category: sum(row["failure_reason"] == category for row in failures) for category in
@@ -286,15 +286,15 @@ def write_e2e_artifacts(result: dict[str, Any], output_dir: Path) -> None:
     failures = result["failed_cases"]
     (output_dir / "failure_analysis.md").write_text("# E2E failure analysis\n\n" + ("No failed cases." if not failures else "\n".join(f"- {row['case_id']}: {row['failure_reason']}" for row in failures)) + "\n", encoding="utf-8")
     metrics = "\n".join(f"- {name}: {value}" for name, value in result["metrics"].items())
-    (output_dir / "latest.md").write_text("# BuildingAI End-to-End Local-Qwen Evaluation\n\n" +
+    (output_dir / "latest.md").write_text("# BuildingAI End-to-End local LLM Evaluation\n\n" +
         f"- Run ID: {result['run_id']}\n- Timestamp: {result['timestamp']}\n- Commit: {result['git_commit']}\n- Provider: {result['provider']}\n- Model: {result['model']}\n- Cases: {result['case_count']}\n- Real LLM calls: {result['real_llm_calls']}\n\n## Metrics\n\n{metrics}\n\n## Failed cases\n\n" +
         ("- None" if not failures else "\n".join(f"- {row['case_id']} ({row['failure_reason']})" for row in failures)) + "\n", encoding="utf-8")
 
 
 def run_e2e_evaluation(*, quick: bool = False, round_label: str = "full", output_dir: Path | None = None) -> dict[str, Any]:
     settings = Settings.load(); provider = LLMManager(settings).get_provider(); ok, detail = provider.test_connection()
-    if getattr(provider, "provider_id", None) != "local_qwen" or not ok:
-        return {"evaluation_type": "local_qwen_end_to_end", "runner_successful": False, "status": "ENVIRONMENT_BLOCKED", "reason": detail,
+    if getattr(provider, "provider_id", None) != "local_llm" or not ok:
+        return {"evaluation_type": "local_llm_end_to_end", "runner_successful": False, "status": "ENVIRONMENT_BLOCKED", "reason": detail,
                 "provider": getattr(provider, "provider_id", None), "model": settings.model, "case_count": 0, "metrics": {}, "failed_cases": [], "failure_categories": {}}
     result = E2ERunner(provider, settings).run(quick=quick, round_label=round_label)
     if output_dir: write_e2e_artifacts(result, output_dir)

@@ -51,7 +51,7 @@ class Settings:
     def __post_init__(self) -> None:
         self.data_dir = Path(self.data_dir)
         aliases = {
-            "ollama": "local_qwen", "qwen": "local_qwen",
+            "ollama": "local_llm", "local_llm": "local_llm",
             "openai": "openai_compatible", "groq": "openai_compatible",
             "openrouter": "openai_compatible",
         }

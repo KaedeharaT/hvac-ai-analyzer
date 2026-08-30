@@ -50,7 +50,8 @@ def configure_font(app: QApplication) -> None:
     """Use Segoe UI where available, without changing application production UI."""
     # Microsoft YaHei covers the Chinese language-switch label too; Segoe UI
     # is a good English fallback on minimal Windows systems.
-    for font_path in (Path(r"C:\Windows\Fonts\msyh.ttc"), Path(r"C:\Windows\Fonts\segoeui.ttf")):
+    windows_fonts = Path(os.environ.get("WINDIR", "")) / "Fonts"
+    for font_path in (windows_fonts / "msyh.ttc", windows_fonts / "segoeui.ttf"):
         if not font_path.exists():
             continue
         identifier = QFontDatabase.addApplicationFont(str(font_path))

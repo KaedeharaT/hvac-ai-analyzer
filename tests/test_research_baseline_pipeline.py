@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from building_ai.config import Settings
 from building_ai.services import BuildingAnalysisPipeline, SemanticService
@@ -28,6 +29,8 @@ def test_enhanced_mode_without_llm_falls_back_without_crashing():
 
 def test_research_fixture_runs_through_product_pipeline():
     fixture = Path("paper_research/tests/fixtures/bems_v2_smoke.csv")
+    if not fixture.is_file():
+        pytest.skip("private research fixture is intentionally excluded from the public repository")
     frame = pd.read_csv(fixture)
     run = BuildingAnalysisPipeline().run(frame, project_id="research-smoke")
     assert len(run.semantics.semantic_results) == len(frame.columns) - 1

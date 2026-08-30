@@ -21,8 +21,8 @@ do not import PyQt. Storage owns persistence.
 ## LLM boundary
 
 Product services use `LLMManager.get_provider()` and the `BaseLLMProvider` contract,
-never a provider-specific SDK. `LocalQwenProvider` wraps optional Ollama use;
-`OpenAICompatibleProvider` supports OpenAI, DeepSeek, Qwen API, LM Studio, vLLM, and
+never a provider-specific SDK. `LocalLLMProvider` wraps optional Ollama use;
+`OpenAICompatibleProvider` supports OpenAI, OpenAI-compatible service, open-source LLM API, LM Studio, vLLM, and
 other compatible endpoints. `UnconfiguredProvider` is the normal fresh-install state
 and returns a clear `LLM unavailable / not configured` result, leaving non-LLM flows
 available. The legacy `LLMClient` facade remains only for compatibility with preserved

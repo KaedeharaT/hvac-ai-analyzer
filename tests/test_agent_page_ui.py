@@ -25,7 +25,7 @@ _APP: QApplication | None = None
 
 
 class _Provider:
-    display_name = "Qwen"
+    display_name = "LLM"
     is_configured = True
 
     @staticmethod

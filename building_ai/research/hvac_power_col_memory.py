@@ -9,7 +9,7 @@ import math
 from collections import defaultdict
 
 # ================================================================
-# 统一的 LLM 打分器：每一列只调用一次 Qwen，返回 C1–C8 全部信息
+# 统一的 LLM 打分器：每一列只调用一次 LLM，返回 C1–C8 全部信息
 # ================================================================
 
 import requests, json
@@ -28,7 +28,7 @@ _SLOT_LLM_CACHE = {}   # 防止同一列重复调用 LLM
 
 
 
-def qwen_chat_json(prompt: str):
+def local_llm_chat_json(prompt: str):
     """兼容旧函数名：实际统一通过 llm_client.py 调用。"""
     return chat_json(
         prompt,
@@ -220,7 +220,7 @@ def normalize_llm_slots(obj: dict) -> dict:
 
 def llm_score_all_slots(col_name, series, neighbor_cols=None):
     """
-    调用本地 Qwen，为某一列一次性生成 C1~C8 所有槽位的评分。
+    调用本地开源大模型，为某一列一次性生成 C1~C8 所有槽位的评分。
     C1~C8 的语义和打分规则，都在 prompt 里详细说明。
     """
     sf = compute_shape_features(series)
@@ -466,7 +466,7 @@ C8: ok（物理的妥当性 / 品質）
 """
 
     try:
-        raw = qwen_chat_json(prompt)
+        raw = local_llm_chat_json(prompt)
         parsed = json.loads(raw) if isinstance(raw, str) else raw
         data = normalize_llm_slots(parsed)
     except Exception as e:
@@ -1135,13 +1135,13 @@ def score_slots_for_label( df,
 
 
 
-# 单独用于“列名 → 角色”的缓存，避免重复调用 Qwen
-# 单独用于“列名 → 角色”的缓存，避免重复调用 Qwen
+# 单独用于“列名 → 角色”的缓存，避免重复调用 LLM
+# 单独用于“列名 → 角色”的缓存，避免重复调用 LLM
 _NAME_LLM_CACHE = {}
 
 _SEMANTIC_LLM_CACHE = {}
 
-def qwen_semantic_attributes(col_name: str):
+def local_llm_semantic_attributes(col_name: str):
     """
     让 LLM 判断开放语义属性：
     - physical_type: temperature / flow / power / energy / pressure / capacity / other
@@ -1207,12 +1207,12 @@ Important:
     }
 
     try:
-        raw = qwen_chat_json(prompt)
+        raw = local_llm_chat_json(prompt)
         obj = json.loads(raw) if isinstance(raw, str) else raw
         if not isinstance(obj, dict):
             obj = default
     except Exception as e:
-        print(f"[QWEN-SEMANTIC ERROR] {col_name}: {e}")
+        print(f"[LLM-SEMANTIC ERROR] {col_name}: {e}")
         obj = default
 
     physical_type = str(obj.get("physical_type", "other")).strip().lower()
@@ -1348,7 +1348,7 @@ def prepare_direct_prompt(
     }
 
 
-def qwen_name_role(
+def local_llm_name_role(
     col_name,
     series=None,
     neighbor_cols=None,
@@ -1357,11 +1357,11 @@ def qwen_name_role(
     matched_column_name=None,
 ):
     """
-    使用所选 Direct Prompt 让 Qwen 直接判定角色（带 self-consistency 投票）。
+    使用所选 Direct Prompt 让 LLM 直接判定角色（带 self-consistency 投票）。
     返回: {"tag": <SLOT_LABELS 或 "other">, "confidence": 0.0~1.0}
 
     机制：
-      1) 对同一列名调用 Qwen n_self_consistency 次；
+      1) 对同一列名调用 LLM n_self_consistency 次；
       2) 用多数投票选 tag，取该 tag 的平均置信度；
       3) 若分歧较大，按分歧比例下调最终 confidence；
       4) 再套用你原来的 COP / energy / other 修正规则。
@@ -1397,13 +1397,13 @@ def qwen_name_role(
     parse_statuses = []
     for i in range(max(1, n_self_consistency)):
         try:
-            raw = qwen_chat_json(prompt)
+            raw = local_llm_chat_json(prompt)
             raw_responses.append(str(raw))
             data_i, parse_status = _parse_direct_json(raw)
             parse_statuses.append(parse_status)
             tag_i = str(data_i.get("tag", "")).strip().lower()
             if tag_i not in DIRECT_LABELS:
-                print(f"[QWEN-NAME INVALID TAG] {col_name}: {tag_i!r}")
+                print(f"[LLM-NAME INVALID TAG] {col_name}: {tag_i!r}")
                 tag_i = "other"
                 parse_status = (
                     "invalid_tag" if parse_status == "ok" else parse_status
@@ -1416,7 +1416,7 @@ def qwen_name_role(
                 conf_i = 0.0
             raw_results.append((tag_i, conf_i))
         except Exception as e:
-            print(f"[QWEN-NAME ERROR] {col_name} (try {i+1}): {e}")
+            print(f"[LLM-NAME ERROR] {col_name} (try {i+1}): {e}")
             parse_statuses.append("request_failure")
 
     if not raw_results:
@@ -1640,37 +1640,37 @@ def infer_role_by_slots(
     df,
     col,
     series,
-    qwen_tag: str | None = None,
-    qwen_conf: float | None = None,
+    local_llm_tag: str | None = None,
+    local_llm_conf: float | None = None,
     slot_llm=None,
     unit_infer=None,
-    use_qwen_direct: bool = True,
+    use_local_llm_direct: bool = True,
     slot_module_enabled: bool = True,
     use_physical_validation: bool = True,
     use_abstention: bool = True,
     tau_high: float = 0.70,      # 插槽“高置信”阈值
     tau_low: float = 0.30,       # 插槽“低置信”阈值
-    name_llm_high: float = 0.80, # 认为“高置信 Qwen”的阈值
+    name_llm_high: float = 0.80, # 认为“高置信 LLM”的阈值
     name_llm_low: float = 0.40,  # 目前主要用于日志和降级判断
 ):
     """
-    综合 Qwen 列名直采 + C1–C8 插槽打分，推断一个字段的最终物理角色。
+    综合 LLM 列名直采 + C1–C8 插槽打分，推断一个字段的最终物理角色。
     """
 
     # === debug 初始化 ===
     debug = {
         "column": str(col),
-        "qwen_tag": qwen_tag,
-        "qwen_conf": qwen_conf,
-        "qwen_type": None,
-        "qwen_device_type": None,
+        "local_llm_tag": local_llm_tag,
+        "local_llm_conf": local_llm_conf,
+        "local_llm_type": None,
+        "local_llm_device_type": None,
         "slot_module_enabled": bool(slot_module_enabled),
         "slot_best_label": None,
         "slot_best_score": None,
         "slot_type": None,
         "final_label": None,
         "final_score": 0.0,
-        "decision": None,          # "qwen_high_conf" / "slot" / "other"
+        "decision": None,          # "local_llm_high_conf" / "slot" / "other"
         "gate_status": None,      # "ACCEPT" / "ABSTAIN"
         "gate_reason": "",
         "eff_q": None,
@@ -1678,7 +1678,7 @@ def infer_role_by_slots(
         "eff_gap": None,
         "c8_best": None,
         "C8": None,
-        "raw_llm_label": qwen_tag,
+        "raw_llm_label": local_llm_tag,
         "slot_score": None,
         "label_before_validation": None,
         "label_after_validation": None,
@@ -1798,15 +1798,15 @@ def infer_role_by_slots(
         return "other"
 
     if not slot_module_enabled:
-        qwen_tag = qwen_tag.strip() if isinstance(qwen_tag, str) else qwen_tag
-        qwen_type = _role_main_type(qwen_tag)
-        qwen_dev_type = _role_device_type(qwen_tag)
+        local_llm_tag = local_llm_tag.strip() if isinstance(local_llm_tag, str) else local_llm_tag
+        local_llm_type = _role_main_type(local_llm_tag)
+        local_llm_dev_type = _role_device_type(local_llm_tag)
         debug.update({
-            "qwen_tag": qwen_tag,
-            "raw_llm_label": qwen_tag,
-            "qwen_conf": qwen_conf,
-            "qwen_type": qwen_type,
-            "qwen_device_type": qwen_dev_type,
+            "local_llm_tag": local_llm_tag,
+            "raw_llm_label": local_llm_tag,
+            "local_llm_conf": local_llm_conf,
+            "local_llm_type": local_llm_type,
+            "local_llm_device_type": local_llm_dev_type,
             "slot_module_enabled": False,
             "physical_validation_enabled": False,
             "slot_best_label": None,
@@ -1814,25 +1814,25 @@ def infer_role_by_slots(
             "slot_score": None,
             "slot_type": None,
             "slot_device_type": None,
-            "eff_q": qwen_conf,
+            "eff_q": local_llm_conf,
             "eff_s": None,
             "eff_gap": None,
             "C8": None,
             "c8_best": None,
         })
-        if use_qwen_direct and qwen_tag is not None and qwen_conf is not None:
+        if use_local_llm_direct and local_llm_tag is not None and local_llm_conf is not None:
             debug.update({
-                "final_label": qwen_tag,
-                "final_score": float(qwen_conf or 0.0),
-                "label_before_validation": qwen_tag,
-                "label_after_validation": qwen_tag,
-                "decision": "qwen_direct_no_slot",
+                "final_label": local_llm_tag,
+                "final_score": float(local_llm_conf or 0.0),
+                "label_before_validation": local_llm_tag,
+                "label_after_validation": local_llm_tag,
+                "decision": "local_llm_direct_no_slot",
                 "gate_status": "ACCEPT",
-                "explain_zh": f"列「{col}」在 wo_slot 中关闭整个 Slot module，最终仅采用 Qwen 直采结果 {qwen_tag}。",
-                "explain_ja": f"列「{col}」は wo_slot で Slot module を無効化し、Qwen の直接判定 {qwen_tag} のみを採用しました。",
+                "explain_zh": f"列「{col}」在 wo_slot 中关闭整个 Slot module，最终仅采用 LLM 直采结果 {local_llm_tag}。",
+                "explain_ja": f"列「{col}」は wo_slot で Slot module を無効化し、LLM の直接判定 {local_llm_tag} のみを採用しました。",
             })
-            print(f"[NO-SLOT] {col} → Qwen direct: {qwen_tag} ({float(qwen_conf or 0.0):.2f})")
-            return _finalize_and_return(qwen_tag, float(qwen_conf or 0.0), {}, debug)
+            print(f"[NO-SLOT] {col} → LLM direct: {local_llm_tag} ({float(local_llm_conf or 0.0):.2f})")
+            return _finalize_and_return(local_llm_tag, float(local_llm_conf or 0.0), {}, debug)
 
         debug.update({
             "final_label": "other",
@@ -1842,10 +1842,10 @@ def infer_role_by_slots(
             "decision": "other_no_slot",
             "gate_status": "ACCEPT",
             "suspicious_flag": True,
-            "explain_zh": f"列「{col}」在 wo_slot 中关闭整个 Slot module，且没有可用 Qwen 直采结果，暂定为 other。",
-            "explain_ja": f"列「{col}」は wo_slot で Slot module が無効で、利用可能な Qwen 直接判定がないため other としました。",
+            "explain_zh": f"列「{col}」在 wo_slot 中关闭整个 Slot module，且没有可用 LLM 直采结果，暂定为 other。",
+            "explain_ja": f"列「{col}」は wo_slot で Slot module が無効で、利用可能な LLM 直接判定がないため other としました。",
         })
-        print(f"[NO-SLOT] {col} no Qwen direct result → other")
+        print(f"[NO-SLOT] {col} no LLM direct result → other")
         return _finalize_and_return("other", 0.0, {}, debug)
 
     # === 新增：全局 C2 物理类型（一次性从 slot_llm 取，用缓存不会重复算） ===
@@ -1913,11 +1913,11 @@ def infer_role_by_slots(
     debug["slot_type"] = slot_type
     debug["slot_device_type"] = slot_dev_type  # ★ 记到 debug 里
 
-    # === 3. 没有 / 不用 Qwen → 完全靠插槽 ===
-    if (not use_qwen_direct) or (qwen_tag is None) or (qwen_conf is None):
+    # === 3. 没有 / 不用 LLM → 完全靠插槽 ===
+    if (not use_local_llm_direct) or (local_llm_tag is None) or (local_llm_conf is None):
         if slot_best_score < tau_low:
-            msg_zh = f"列「{col}」没有 Qwen 直采结果，且插槽打分也偏低（{slot_best_score:.2f}），暂定为 other，建议人工确认。"
-            msg_ja = f"列「{col}」は Qwen 列名判定がなく、スロットスコアも低いため（{slot_best_score:.2f}）、一旦 other とし、目視確認を推奨します。"
+            msg_zh = f"列「{col}」没有 LLM 直采结果，且插槽打分也偏低（{slot_best_score:.2f}），暂定为 other，建议人工确认。"
+            msg_ja = f"列「{col}」は LLM 列名判定がなく、スロットスコアも低いため（{slot_best_score:.2f}）、一旦 other とし、目視確認を推奨します。"
             debug.update({
                 "final_label": "other",
                 "final_score": slot_best_score,
@@ -1928,11 +1928,11 @@ def infer_role_by_slots(
                 "explain_zh": msg_zh,
                 "explain_ja": msg_ja,
             })
-            print(f"[DECISION] {col} 无 Qwen / 未使用直采，且 slot 置信度过低({slot_best_score:.2f}) → other")
+            print(f"[DECISION] {col} 无 LLM / 未使用直采，且 slot 置信度过低({slot_best_score:.2f}) → other")
             return _finalize_and_return("other", slot_best_score, per_label, debug)
 
-        msg_zh = f"列「{col}」没有 Qwen 列名先验，最终角色由 C1–C8 插槽综合判断为 {slot_best_label}（score={slot_best_score:.2f}）。"
-        msg_ja = f"列「{col}」は Qwen 列名の事前情報がないため、C1〜C8 スロットの総合評価により {slot_best_label}（score={slot_best_score:.2f}）と判定しました。"
+        msg_zh = f"列「{col}」没有 LLM 列名先验，最终角色由 C1–C8 插槽综合判断为 {slot_best_label}（score={slot_best_score:.2f}）。"
+        msg_ja = f"列「{col}」は LLM 列名の事前情報がないため、C1〜C8 スロットの総合評価により {slot_best_label}（score={slot_best_score:.2f}）と判定しました。"
         debug.update({
             "final_label": slot_best_label,
             "final_score": slot_best_score,
@@ -1943,33 +1943,33 @@ def infer_role_by_slots(
             "explain_zh": msg_zh,
             "explain_ja": msg_ja,
         })
-        print(f"[DECISION] {col} 无 Qwen / 未使用直采 → 使用 slot 结果: {slot_best_label} ({slot_best_score:.2f})")
+        print(f"[DECISION] {col} 无 LLM / 未使用直采 → 使用 slot 结果: {slot_best_label} ({slot_best_score:.2f})")
         return _finalize_and_return(slot_best_label, slot_best_score, per_label, debug)
 
 
-    # === 4. 有 Qwen 的情况：先做类型+置信度检查 ===
-    qwen_tag = qwen_tag.strip() if isinstance(qwen_tag, str) else qwen_tag
-    qwen_type = _role_main_type(qwen_tag)
-    qwen_dev_type = _role_device_type(qwen_tag)          # ★ 新增：Qwen 设备类型
-    q_conf_adj = float(qwen_conf)
+    # === 4. 有 LLM 的情况：先做类型+置信度检查 ===
+    local_llm_tag = local_llm_tag.strip() if isinstance(local_llm_tag, str) else local_llm_tag
+    local_llm_type = _role_main_type(local_llm_tag)
+    local_llm_dev_type = _role_device_type(local_llm_tag)          # ★ 新增：LLM 设备类型
+    q_conf_adj = float(local_llm_conf)
 
-    debug["qwen_tag"] = qwen_tag
-    debug["raw_llm_label"] = qwen_tag
-    debug["qwen_conf"] = qwen_conf
-    debug["qwen_type"] = qwen_type
-    debug["qwen_device_type"] = qwen_dev_type
+    debug["local_llm_tag"] = local_llm_tag
+    debug["raw_llm_label"] = local_llm_tag
+    debug["local_llm_conf"] = local_llm_conf
+    debug["local_llm_type"] = local_llm_type
+    debug["local_llm_device_type"] = local_llm_dev_type
 
-    print(f"[QWEN-NAME] {col} → tag={qwen_tag}, conf={qwen_conf:.2f}, type={qwen_type}")
+    print(f"[LLM-NAME] {col} → tag={local_llm_tag}, conf={local_llm_conf:.2f}, type={local_llm_type}")
 
     # 4.1 初始判断：高置信 or 非高置信
     if q_conf_adj < name_llm_high:
         print(
-            f"[QWEN-CHECK] {col} Qwen conf={q_conf_adj:.2f} < 高置信阈值({name_llm_high})，"
+            f"[LLM-CHECK] {col} LLM conf={q_conf_adj:.2f} < 高置信阈值({name_llm_high})，"
             f"不作为强先验，仅供参考 → 进入插槽决策阶段"
         )
         # 后面统一按“插槽主导”再综合
     else:
-        # === 4.2 Qwen 高置信 → 用 AI 信号加权比较 Qwen vs Slot，而不是直接说 Qwen 过度自信 ===
+        # === 4.2 LLM 高置信 → 用 AI 信号加权比较 LLM vs Slot，而不是直接说 LLM 过度自信 ===
 
 
         # 0) 额外算一个“这个列是不是温度列”的信号（名字 + C2 + unit_type）
@@ -1989,31 +1989,31 @@ def infer_role_by_slots(
             is_temp_like = False
 
 
-        # 1) Qwen 侧证据：列名置信度 + 对该 tag 的插槽得分
-        qwen_slot_score = per_label.get(qwen_tag, {}).get("total", 0.0) if qwen_tag in per_label else 0.0
-        eff_q = 0.6 * q_conf_adj + 0.4 * qwen_slot_score
+        # 1) LLM 侧证据：列名置信度 + 对该 tag 的插槽得分
+        local_llm_slot_score = per_label.get(local_llm_tag, {}).get("total", 0.0) if local_llm_tag in per_label else 0.0
+        eff_q = 0.6 * q_conf_adj + 0.4 * local_llm_slot_score
 
         # 2) Slot 侧证据：slot_best_score
         eff_s = slot_best_score
 
         # 3) 看 C2 物理量类型站哪一边（完全来自 slot_llm，不靠手写关键词）
-        if c2_main_type == qwen_type and c2_main_val > 0.5:
-            eff_q += 0.15 * c2_main_val  # C2 支持 Qwen 这边
+        if c2_main_type == local_llm_type and c2_main_val > 0.5:
+            eff_q += 0.15 * c2_main_val  # C2 支持 LLM 这边
 
-        # 对 slot 的 C2 加成：如果当前列“看起来像温度”，且 Qwen 是 temp，而 slot 是 power/energy，
+        # 对 slot 的 C2 加成：如果当前列“看起来像温度”，且 LLM 是 temp，而 slot 是 power/energy，
         # 就不要给 slot 这份 C2 bonus（否则会放大“把温度当电力”的错误）
         if c2_main_type == slot_type and c2_main_val > 0.5:
-            if not (is_temp_like and qwen_type == "temp" and slot_type in ("power", "energy")):
+            if not (is_temp_like and local_llm_type == "temp" and slot_type in ("power", "energy")):
                 eff_s += 0.15 * c2_main_val  # C2 支持 slot 这边
 
         # 3.5) header 级别的先验：名字/C2 像温度 → 偏向温度解读
-        if is_temp_like and qwen_type == "temp":
-            eff_q += 0.2  # 给 Qwen 额外加一个“这列是温度”的加成
+        if is_temp_like and local_llm_type == "temp":
+            eff_q += 0.2  # 给 LLM 额外加一个“这列是温度”的加成
         if is_temp_like and slot_type in ("power", "energy"):
             eff_s = max(0.0, eff_s - 0.15)  # 同时温和地削一点 slot 的权重
 
         print(
-            f"[QWEN-VS-SLOT] {col} eff_q={eff_q:.2f} (q_tag={qwen_tag}, type={qwen_type}) | "
+            f"[LLM-VS-SLOT] {col} eff_q={eff_q:.2f} (q_tag={local_llm_tag}, type={local_llm_type}) | "
             f"eff_s={eff_s:.2f} (slot={slot_best_label}, type={slot_type}), "
             f"C2={c2_main_type}:{c2_main_val:.2f}, temp_like={is_temp_like}"
         )
@@ -2023,7 +2023,7 @@ def infer_role_by_slots(
         # --- Gate bookkeeping: explicit ACCEPT/ABSTAIN ---
         c8_best = _detail_c8(slot_best_label)
         eff_gap = abs(eff_q - eff_s)
-        label_before_validation = qwen_tag if eff_q >= eff_s else slot_best_label
+        label_before_validation = local_llm_tag if eff_q >= eff_s else slot_best_label
         debug.update({
             "eff_q": eff_q,
             "eff_s": eff_s,
@@ -2053,8 +2053,8 @@ def infer_role_by_slots(
         debug["gate_status"] = gate_status
         debug["gate_reason"] = gate_reason
 
-        # If we abstain (and Qwen did not explicitly say 'other'), force 'other' and explain why.
-        if gate_status == "ABSTAIN" and qwen_tag != "other":
+        # If we abstain (and LLM did not explicitly say 'other'), force 'other' and explain why.
+        if gate_status == "ABSTAIN" and local_llm_tag != "other":
 
             name = str(col)
 
@@ -2066,7 +2066,7 @@ def infer_role_by_slots(
             if strong_name_hint:
 
 
-                soft_label = qwen_tag if qwen_tag and qwen_tag != "other" else slot_best_label
+                soft_label = local_llm_tag if local_llm_tag and local_llm_tag != "other" else slot_best_label
                 soft_score = max(q_conf_adj, slot_best_score or 0.0)
 
                 debug.update({
@@ -2095,21 +2095,21 @@ def infer_role_by_slots(
 
         # ===== PATCH: 高置信 other 的否决权（防止体系外变量被硬塞） =====
         # 条件：
-        # 1) Qwen 高置信
-        # 2) Qwen 判为 other（明确“不属于当前角色体系”）
+        # 1) LLM 高置信
+        # 2) LLM 判为 other（明确“不属于当前角色体系”）
         # 3) slot 并没有明显更强
         if (
-            qwen_tag == "other"
+            local_llm_tag == "other"
             and q_conf_adj >= name_llm_high
             and eff_s < eff_q + 0.15   # slot 没有明显优势
         ):
             msg_zh = (
-                f"列「{col}」被 Qwen 高置信判定为 other（不属于当前物理角色体系），"
+                f"列「{col}」被 LLM 高置信判定为 other（不属于当前物理角色体系），"
                 f"插槽结果优势不足（eff_s={eff_s:.2f}, eff_q={eff_q:.2f}），"
                 f"为避免误归类，最终保留为 other。"
             )
             msg_ja = (
-                f"列「{col}」は Qwen により高信頼度で other（本ロール体系外）と判定され、"
+                f"列「{col}」は LLM により高信頼度で other（本ロール体系外）と判定され、"
                 f"スロット側の優位性が不十分なため（eff_s={eff_s:.2f}, eff_q={eff_q:.2f}）、"
                 f"誤分類防止のため other を維持します。"
             )
@@ -2117,70 +2117,70 @@ def infer_role_by_slots(
                     "final_label": "other",
                     "final_score": q_conf_adj,
                     "label_after_validation": "other",
-                    "decision": "qwen_other_veto",
+                    "decision": "local_llm_other_veto",
                 "suspicious_flag": False,
                 "explain_zh": msg_zh,
                 "explain_ja": msg_ja,
             })
-            print(f"[DECISION] {col} Qwen 高置信 other → 否决 slot，保留 other")
+            print(f"[DECISION] {col} LLM 高置信 other → 否决 slot，保留 other")
             return _finalize_and_return("other", q_conf_adj, per_label, debug)
         # ===== PATCH END =====
 
 
 
 
-        # 4) 若 Qwen 侧综合证据 ≥ slot 侧，则直接采用 Qwen
+        # 4) 若 LLM 侧综合证据 ≥ slot 侧，则直接采用 LLM
         if eff_q >= eff_s:
-            if use_qwen_direct:
-                if qwen_tag in per_label:
-                    best_score = per_label[qwen_tag].get("total", q_conf_adj)
+            if use_local_llm_direct:
+                if local_llm_tag in per_label:
+                    best_score = per_label[local_llm_tag].get("total", q_conf_adj)
                 else:
                     best_score = q_conf_adj
 
                 msg_zh = (
-                    f"列「{col}」中，Qwen 列名判定与 C1–C8/物理类型/列名综合后支持度更高 "
-                    f"(eff_q={eff_q:.2f} ≥ eff_s={eff_s:.2f})，因此采用 Qwen 结果 {qwen_tag}。"
+                    f"列「{col}」中，LLM 列名判定与 C1–C8/物理类型/列名综合后支持度更高 "
+                    f"(eff_q={eff_q:.2f} ≥ eff_s={eff_s:.2f})，因此采用 LLM 结果 {local_llm_tag}。"
                 )
                 msg_ja = (
-                    f"列「{col}」では、Qwen の列名判定と C1〜C8/物理タイプ/列名の総合評価の支持度が "
+                    f"列「{col}」では、LLM の列名判定と C1〜C8/物理タイプ/列名の総合評価の支持度が "
                     f"スロット側より高いため (eff_q={eff_q:.2f} ≥ eff_s={eff_s:.2f})、"
-                    f"最終ラベルとして {qwen_tag} を採用しました。"
+                    f"最終ラベルとして {local_llm_tag} を採用しました。"
                 )
                 debug.update({
-                    "final_label": qwen_tag,
+                    "final_label": local_llm_tag,
                     "final_score": best_score,
-                    "label_after_validation": qwen_tag,
-                    "decision": "qwen_weighted_win",
+                    "label_after_validation": local_llm_tag,
+                    "decision": "local_llm_weighted_win",
                     "suspicious_flag": False,
                     "explain_zh": msg_zh,
                     "explain_ja": msg_ja,
                 })
                 print(
-                    f"[DECISION] {col} Qwen 综合证据更强 → 采用 Qwen: {qwen_tag} "
-                    f"(conf={qwen_conf:.2f}, eff_q={eff_q:.2f})"
+                    f"[DECISION] {col} LLM 综合证据更强 → 采用 LLM: {local_llm_tag} "
+                    f"(conf={local_llm_conf:.2f}, eff_q={eff_q:.2f})"
                 )
-                return _finalize_and_return(qwen_tag, best_score, per_label, debug)
+                return _finalize_and_return(local_llm_tag, best_score, per_label, debug)
 
 
-        # 5) 只有在 slot 证据明显更强时，才把 Qwen 当作“过度自信”降级
-        margin = 0.15  # slot 至少要比 Qwen 多 0.15 才算真正赢
+        # 5) 只有在 slot 证据明显更强时，才把 LLM 当作“过度自信”降级
+        margin = 0.15  # slot 至少要比 LLM 多 0.15 才算真正赢
         if eff_s >= eff_q + margin and slot_best_score >= tau_high:
             overconf_reason = (
-                f"slot 综合证据明显强于 Qwen (eff_s={eff_s:.2f} ≥ eff_q={eff_q:.2f}+{margin})，"
+                f"slot 综合证据明显强于 LLM (eff_s={eff_s:.2f} ≥ eff_q={eff_q:.2f}+{margin})，"
                 f"且 slot_best_score={slot_best_score:.2f} ≥ tau_high={tau_high}"
             )
-            print(f"[QWEN-OVERCNF] {col} {overconf_reason} → 将 Qwen 降级为低置信")
+            print(f"[LLM-OVERCNF] {col} {overconf_reason} → 将 LLM 降级为低置信")
             debug["overconf_flag"] = True
             debug["overconf_reason"] = overconf_reason
             q_conf_adj = max(0.0, name_llm_low - 1e-3)
         else:
             print(
-                f"[QWEN-MED] {col} Qwen/slot 证据接近或互相牵制 (eff_q={eff_q:.2f}, eff_s={eff_s:.2f})，"
-                f"不视为 Qwen 过度自信，后续由插槽结果主导。"
+                f"[LLM-MED] {col} LLM/slot 证据接近或互相牵制 (eff_q={eff_q:.2f}, eff_s={eff_s:.2f})，"
+                f"不视为 LLM 过度自信，后续由插槽结果主导。"
             )
 
 
-    # === 5. 走到这里：Qwen 非高置信 / 已被降级 → 插槽主导 ===
+    # === 5. 走到这里：LLM 非高置信 / 已被降级 → 插槽主导 ===
     # --- Gate bookkeeping for slot-dominant path ---
     c8_best = _detail_c8(slot_best_label)
     debug["c8_best"] = c8_best
@@ -2214,11 +2214,11 @@ def infer_role_by_slots(
     if slot_best_score < tau_low:
         # 插槽也没把握 → 标记为 suspicious
         msg_zh = (
-            f"列「{col}」的 Qwen 置信度不足或已被判定为过度自信，"
+            f"列「{col}」的 LLM 置信度不足或已被判定为过度自信，"
             f"同时插槽得分也较低（{slot_best_score:.2f}），无法可靠分类，暂定为 other，建议人工核对。"
         )
         msg_ja = (
-            f"列「{col}」は Qwen の信頼度が低い（または過信と判定）うえに、"
+            f"列「{col}」は LLM の信頼度が低い（または過信と判定）うえに、"
             f"スロットスコアも低いため（{slot_best_score:.2f}）、一旦 other とし、目視確認を推奨します。"
         )
         debug.update({
@@ -2231,18 +2231,18 @@ def infer_role_by_slots(
             "explain_ja": msg_ja,
         })
         print(
-            f"[DECISION] {col} Qwen 非高置信/已降级(q={q_conf_adj:.2f}) 且 slot_best_score 过低({slot_best_score:.2f}) "
+            f"[DECISION] {col} LLM 非高置信/已降级(q={q_conf_adj:.2f}) 且 slot_best_score 过低({slot_best_score:.2f}) "
             f"→ 标记为 other"
         )
         return _finalize_and_return("other", max(slot_best_score, q_conf_adj), per_label, debug)
 
     # 插槽有一定把握 → 完全采用插槽结果
     msg_zh = (
-        f"列「{col}」的 Qwen 结果置信度不足/已降级，"
+        f"列「{col}」的 LLM 结果置信度不足/已降级，"
         f"插槽综合得分较高（{slot_best_score:.2f}），最终采用 C1–C8 插槽判断结果 {slot_best_label}。"
     )
     msg_ja = (
-        f"列「{col}」は Qwen の信頼度が十分でない（または過信と判定された）ため、"
+        f"列「{col}」は LLM の信頼度が十分でない（または過信と判定された）ため、"
         f"C1〜C8 スロットの総合スコア（{slot_best_score:.2f}）を優先し、最終ラベルを {slot_best_label} としました。"
     )
     debug.update({
@@ -2256,7 +2256,7 @@ def infer_role_by_slots(
     })
 
     print(
-        f"[DECISION] {col} Qwen 非高置信/已降级(q={q_conf_adj:.2f})，"
+        f"[DECISION] {col} LLM 非高置信/已降级(q={q_conf_adj:.2f})，"
         f"slot_best_score={slot_best_score:.2f} >= tau_low({tau_low}) → 使用 slot: {slot_best_label}"
     )
     return _finalize_and_return(slot_best_label, slot_best_score, per_label, debug)
@@ -2454,24 +2454,24 @@ def batch_physical_role_review(
 
     active_slot_llm = slot_llm if use_slot_features else None
 
-    # === 主循环：每一列做一次 Qwen + C1~C8 推断 ===
+    # === 主循环：每一列做一次 LLM + C1~C8 推断 ===
     for col in df.columns:
         if use_physics_reasoning:
-            semantic_info = qwen_semantic_attributes(col)
+            semantic_info = local_llm_semantic_attributes(col)
         else:
             semantic_info = {"physical_type": None, "equipment_type": None, "hvac_related": None,
                              "cop_relevance": True, "confidence": 0.0,
                              "reason": "physics_reasoning_disabled"}
         # Full Model 固定使用原始 Direct V1；实验配置不得改变 Full Model。
-        name_info = qwen_name_role(
+        name_info = local_llm_name_role(
             col, prompt_version="direct_v1_name"
         )  # {"tag": ..., "confidence": ...}
         label, score, per_label, dbg = infer_role_by_slots(
             df=df,
             col=col,
             series=df[col],
-            qwen_tag=name_info["tag"],
-            qwen_conf=name_info["confidence"],
+            local_llm_tag=name_info["tag"],
+            local_llm_conf=name_info["confidence"],
             slot_llm=active_slot_llm,
             unit_infer=unit_infer,
 
@@ -2593,7 +2593,7 @@ def batch_physical_role_review(
 
     print(f"\n[COP-COLS] 将参与 COP/负荷率计算的列: {cop_cols}")
     print(f"[ENERGY-COLS] 被识别为 積算/日算 電力量 的列(不直接参与 COP): {energy_cols}")
-    print("\n=== 批量自动分类完成（Qwen高置信 + 插槽物理检查 + debug 输出）===")
+    print("\n=== 批量自动分类完成（LLM高置信 + 插槽物理检查 + debug 输出）===")
     return review_dict, ai_roles, slot_details
 
 
@@ -2704,17 +2704,17 @@ def flatten_slot_debug_fields(per_label, debug):
         "slot_module_enabled": debug.get("slot_module_enabled"),
         "physical_type_rule": debug.get("physical_type"),
         "device_type_rule": debug.get("device_type"),
-        "qwen_tag": debug.get("qwen_tag"),
+        "local_llm_tag": debug.get("local_llm_tag"),
         "raw_llm_label": debug.get("raw_llm_label"),
-        "qwen_conf": debug.get("qwen_conf"),
-        "qwen_type": debug.get("qwen_type"),
-        "qwen_device_type": debug.get("qwen_device_type"),
+        "local_llm_conf": debug.get("local_llm_conf"),
+        "local_llm_type": debug.get("local_llm_type"),
+        "local_llm_device_type": debug.get("local_llm_device_type"),
         "slot_best_label": debug.get("slot_best_label"),
         "slot_best_score": debug.get("slot_best_score"),
         "slot_score": debug.get("slot_score"),
         "slot_type": debug.get("slot_type"),
         "slot_device_type": debug.get("slot_device_type"),
-        "qwen_slot_score": per_label.get(debug.get("qwen_tag"), {}).get("total", 0.0),
+        "local_llm_slot_score": per_label.get(debug.get("local_llm_tag"), {}).get("total", 0.0),
         "eff_q": debug.get("eff_q"),
         "eff_s": debug.get("eff_s"),
         "eff_gap": debug.get("eff_gap"),
@@ -2761,7 +2761,7 @@ def flatten_slot_debug_fields(per_label, debug):
 
 def build_slot_debug_row(col, final_label, final_score, per_label, debug):
     """
-    把某一列的最终结果 + 插槽明细 + Qwen/Slot 对比信息
+    把某一列的最终结果 + 插槽明细 + LLM/Slot 对比信息
     打平成一行 dict，用于写入 CSV。
     """
     row = {
@@ -2771,10 +2771,10 @@ def build_slot_debug_row(col, final_label, final_score, per_label, debug):
         "decision": debug.get("decision"),
         "suspicious_flag": debug.get("suspicious_flag"),
         "slot_module_enabled": debug.get("slot_module_enabled"),
-        "qwen_tag": debug.get("qwen_tag"),
+        "local_llm_tag": debug.get("local_llm_tag"),
         "raw_llm_label": debug.get("raw_llm_label"),
-        "qwen_conf": debug.get("qwen_conf"),
-        "qwen_type": debug.get("qwen_type"),
+        "local_llm_conf": debug.get("local_llm_conf"),
+        "local_llm_type": debug.get("local_llm_type"),
         "slot_best_label": debug.get("slot_best_label"),
         "slot_best_score": debug.get("slot_best_score"),
         "slot_score": debug.get("slot_score"),

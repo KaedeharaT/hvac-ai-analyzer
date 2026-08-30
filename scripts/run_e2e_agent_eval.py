@@ -1,4 +1,4 @@
-"""Run the real Local-Qwen BuildingAI E2E evaluation."""
+"""Run the real local LLM BuildingAI E2E evaluation."""
 from __future__ import annotations
 import argparse, json, sys
 from pathlib import Path

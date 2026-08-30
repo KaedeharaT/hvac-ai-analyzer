@@ -20,7 +20,7 @@ from building_ai.agent_runtime import AgentRuntime
 from building_ai.memory import MemoryStore
 from building_ai.observability import TraceStore
 from building_ai.core.equipment_identity import normalize_equipment_id
-from building_ai.llm import apply_detected_local_qwen, discover_local_qwen
+from building_ai.llm import apply_detected_local_model, discover_local_models
 from building_ai.models import SemanticStatus, TAXONOMY
 from building_ai.storage import DuplicateImportError
 from building_ai.ui.theme import SPACING_XS, SPACING_LG, SPACING_MD, SPACING_SM
@@ -1155,7 +1155,7 @@ class AgentPage(BasePage):
 
 
 class SettingsPage(BasePage):
-    PROVIDERS = (("not_configured", "disabled"), ("local_qwen", "local_qwen"), ("openai_compatible", "openai_compatible"), ("custom", "custom"))
+    PROVIDERS = (("not_configured", "disabled"), ("local_llm", "local_llm"), ("openai_compatible", "openai_compatible"), ("custom", "custom"))
     def __init__(self, context):
         super().__init__(context, "settings")
         self.form = QFormLayout(); self.form.setSpacing(SPACING_MD); self._local_models = []
@@ -1171,7 +1171,7 @@ class SettingsPage(BasePage):
             label = QLabel(); self.form_labels[widget] = label; self.form.addRow(label, widget)
         self.ollama_label = QLabel(); self.form.addRow(self.ollama_label, self.ollama_url); self.layout.addLayout(self.form)
         buttons = QHBoxLayout(); self.redetect_button = QPushButton(); self.advanced_button = QPushButton(); self.advanced_button.setCheckable(True); self.test_button = QPushButton(); self.save_button = QPushButton(); self.save_button.setObjectName("PrimaryButton")
-        self.redetect_button.clicked.connect(self.detect_local_qwen); self.advanced_button.toggled.connect(lambda _: self.update_provider_fields(detect=False)); self.test_button.clicked.connect(self.test_connection); self.save_button.clicked.connect(self.save)
+        self.redetect_button.clicked.connect(self.detect_local_llm); self.advanced_button.toggled.connect(lambda _: self.update_provider_fields(detect=False)); self.test_button.clicked.connect(self.test_connection); self.save_button.clicked.connect(self.save)
         buttons.addWidget(self.redetect_button); buttons.addWidget(self.advanced_button); buttons.addWidget(self.test_button); buttons.addWidget(self.save_button); buttons.addStretch(1); self.layout.addLayout(buttons); self.connection_status = QLabel(); self.connection_status.setObjectName("Muted"); self.layout.addWidget(self.connection_status); self.layout.addStretch(1)
         self.provider.currentIndexChanged.connect(self.update_provider_fields); self.retranslate_ui(); self.update_provider_fields()
 
@@ -1186,9 +1186,9 @@ class SettingsPage(BasePage):
         self.redetect_button.setText(tr("redetect")); self.advanced_button.setText(tr("advanced_settings")); self.test_button.setText(tr("test_connection")); self.save_button.setText(tr("save_settings")); self.update_provider_fields(detect=False)
 
     def update_provider_fields(self, *_: object, detect: bool = True):
-        provider = self.provider.currentData(); local = provider == "local_qwen"; remote = provider in {"openai_compatible", "custom"}
+        provider = self.provider.currentData(); local = provider == "local_llm"; remote = provider in {"openai_compatible", "custom"}
         if local and detect:
-            self.detect_local_qwen()
+            self.detect_local_llm()
         self.model.setEditable(not local or self.advanced_button.isChecked())
         for widget in (self.model,): widget.setVisible(provider != "not_configured")
         self.detection_status.setVisible(local)
@@ -1206,10 +1206,10 @@ class SettingsPage(BasePage):
         if hasattr(window, "update_status"):
             window.update_status()
 
-    def detect_local_qwen(self):
-        if self.provider.currentData() != "local_qwen":
+    def detect_local_llm(self):
+        if self.provider.currentData() != "local_llm":
             return
-        self._local_models = discover_local_qwen(self.context.settings)
+        self._local_models = discover_local_models(self.context.settings)
         current = self.model.currentText().strip()
         self.model.blockSignals(True); self.model.clear()
         for item in self._local_models:
@@ -1222,30 +1222,30 @@ class SettingsPage(BasePage):
             # Make the detected model usable immediately.  Persistence remains an
             # explicit action through Save Settings, so a cancelled change does
             # not overwrite the user's local preference file.
-            apply_detected_local_qwen(self.context.settings, selected)
+            apply_detected_local_model(self.context.settings, selected)
             self.context.reload_llm()
             window = self.window()
             if hasattr(window, "update_status"):
                 window.update_status()
             self.detection_status.setStyleSheet("color: #16A34A;")
-            self.detection_status.setText(f"● {tr('local_qwen_ready', model=selected.model)}")
+            self.detection_status.setText(f"● {tr('local_llm_ready', model=selected.model)}")
         else:
             if current:
                 self.model.addItem(current)
             self.detection_status.setStyleSheet("color: #D97706;")
-            self.detection_status.setText(f"● {tr('local_qwen_not_found')}")
+            self.detection_status.setText(f"● {tr('local_llm_not_found')}")
         self.model.blockSignals(False)
         self.update_provider_fields(detect=False)
 
     def test_connection(self):
-        if self.provider.currentData() == "local_qwen" and not self._local_models:
-            self.detect_local_qwen()
+        if self.provider.currentData() == "local_llm" and not self._local_models:
+            self.detect_local_llm()
         self._apply_to_context(); provider = self.context.llm_manager.get_provider(); ok, message = provider.test_connection()
-        if ok and self.provider.currentData() == "local_qwen":
+        if ok and self.provider.currentData() == "local_llm":
             try:
                 reply = provider.generate("Reply with exactly: ready", temperature=0).strip()
                 ok = bool(reply)
-                message = f"{tr('local_qwen_connected')}: {reply[:80]}" if ok else tr("connection_error")
+                message = f"{tr('local_llm_connected')}: {reply[:80]}" if ok else tr("connection_error")
             except Exception as exc:
                 ok, message = False, str(exc)
         self.connection_status.setStyleSheet(f"color: {'#16A34A' if ok else '#D97706'};"); self.connection_status.setText("● " + message); QMessageBox.information(self, tr("test_result"), message)
