@@ -1,5 +1,10 @@
 # Architecture
 
+The LLM boundary is provider- and model-agnostic: product and Agent services call
+the common provider contract, which is implemented by local and OpenAI-compatible
+adapters. Qwen is only a documented local evaluation model; replacing it does not
+change business logic, but does require rerunning model-dependent evaluation.
+
 ## Boundary
 
 The desktop follows one directional dependency:

@@ -52,6 +52,8 @@ class Settings:
         self.data_dir = Path(self.data_dir)
         aliases = {
             "ollama": "local_llm", "local_llm": "local_llm",
+            # Backward compatibility for settings saved before the provider-neutral rename.
+            "qwen": "local_llm", "local_qwen": "local_llm",
             "openai": "openai_compatible", "groq": "openai_compatible",
             "openrouter": "openai_compatible",
         }
