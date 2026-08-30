@@ -11,7 +11,7 @@ from building_ai.i18n import LanguageManager, tr
 from .context import ApplicationContext
 from .pages import (
     AgentPage, AnalyticsPage, DashboardPage, DataPage, EnergyAnalysisPage, EquipmentPage,
-    ProjectsPage, SemanticsPage, SettingsPage,
+    ProjectsPage, SemanticsPage, SettingsPage, DrawingIntelligencePage,
 )
 from .pages.knowledge_page import KnowledgeBasePage
 from .styles import application_stylesheet
@@ -25,12 +25,12 @@ class MainWindow(QMainWindow):
     NAVIGATION = (
         ("▦", "dashboard", DashboardPage), ("▣", "projects", ProjectsPage),
         ("⇧", "import_data", DataPage), ("◇", "semantic_mapping", SemanticsPage),
-        ("⌘", "equipment", EquipmentPage), ("▤", "energy_analysis", EnergyAnalysisPage), ("▤", "analysis", AnalyticsPage),
+        ("⌘", "equipment", EquipmentPage), ("▧", "drawing_intelligence", DrawingIntelligencePage), ("▤", "energy_analysis", EnergyAnalysisPage), ("▤", "analysis", AnalyticsPage),
         ("✦", "agent", AgentPage), ("◫", "knowledge_base", KnowledgeBasePage), ("⚙", "settings", SettingsPage),
     )
-    NAV_GROUPS = {0: "nav_overview", 1: "nav_data", 5: "nav_analytics", 7: "nav_ai"}
+    NAV_GROUPS = {0: "nav_overview", 1: "nav_data", 6: "nav_analytics", 8: "nav_ai"}
     NAV_ICONS = (QStyle.SP_DesktopIcon, QStyle.SP_DirIcon, QStyle.SP_DialogOpenButton,
-                 QStyle.SP_FileDialogDetailedView, QStyle.SP_ComputerIcon, QStyle.SP_FileDialogContentsView,
+                 QStyle.SP_FileDialogDetailedView, QStyle.SP_ComputerIcon, QStyle.SP_FileDialogContentsView, QStyle.SP_FileDialogListView,
                  QStyle.SP_MessageBoxInformation, QStyle.SP_DialogHelpButton, QStyle.SP_DirOpenIcon, QStyle.SP_FileDialogInfoView)
 
     def __init__(self, context: ApplicationContext | None = None):
