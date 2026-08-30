@@ -6,7 +6,7 @@ from building_ai.config import Settings
 
 from .base import BaseLLMProvider, LLMUnavailableError
 from .openai_provider import OpenAICompatibleProvider
-from .qwen_local import LocalQwenProvider
+from .local_llm import LocalLLMProvider
 
 
 class UnconfiguredProvider(BaseLLMProvider):
@@ -32,8 +32,8 @@ class LLMManager:
         self.timeout = timeout
 
     def get_provider(self) -> BaseLLMProvider:
-        if self.settings.provider == "local_qwen":
-            return LocalQwenProvider(self.settings, self.timeout)
+        if self.settings.provider == "local_llm":
+            return LocalLLMProvider(self.settings, self.timeout)
         if self.settings.provider == "openai_compatible":
             return OpenAICompatibleProvider(self.settings, self.timeout)
         if self.settings.provider == "custom":

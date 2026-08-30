@@ -100,7 +100,7 @@ class OpportunityService:
                 system_prompt=ENERGY_DIAGNOSIS_SYSTEM_PROMPT, temperature=0, seed=0,
             )
             if not isinstance(response, dict):
-                raise ValueError("Qwen response was not a JSON object")
+                raise ValueError("LLM response was not a JSON object")
             allowed = {"summary", "confirmed_by_data", "possible_causes", "recommended_actions", "additional_data_needed"}
             return {"status": "available", **{key: response.get(key, [] if key != "summary" else "") for key in allowed}}
         except Exception as exc:

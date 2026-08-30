@@ -1,4 +1,4 @@
-"""Optional Ollama-backed Local Qwen provider."""
+"""Optional Ollama-backed local LLM provider."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ from building_ai.config import Settings
 from .base import BaseLLMProvider, LLMError, LLMUnavailableError
 
 
-class LocalQwenProvider(BaseLLMProvider):
-    provider_id = "local_qwen"
-    display_name = "Qwen"
+class LocalLLMProvider(BaseLLMProvider):
+    provider_id = "local_llm"
+    display_name = "Local open-source LLM"
 
     def __init__(self, settings: Settings, timeout: float = 120):
         self.settings = settings
@@ -33,7 +33,7 @@ class LocalQwenProvider(BaseLLMProvider):
             models = {item.get("name") for item in response.json().get("models", [])}
             if self.settings.model not in models:
                 return False, f"Ollama is reachable, but model '{self.settings.model}' is not installed"
-            return True, "Connected to local Qwen"
+            return True, "Connected to local LLM"
         except (requests.RequestException, ValueError) as exc:
             return False, f"Unable to reach Ollama: {exc}"
 
@@ -55,4 +55,4 @@ class LocalQwenProvider(BaseLLMProvider):
             response.raise_for_status()
             return str(response.json()["message"]["content"])
         except (requests.RequestException, KeyError, ValueError) as exc:
-            raise LLMError(f"Local Qwen request failed: {exc}") from exc
+            raise LLMError(f"local LLM request failed: {exc}") from exc

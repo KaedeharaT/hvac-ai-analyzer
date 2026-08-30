@@ -107,7 +107,7 @@ def test_diagnosis_detects_short_cycling_and_low_load_parallel_operation():
     assert "frequent_start_stop" in {item.finding_type for item in cycle_result.findings}
 
 
-def test_opportunity_mapping_survives_local_qwen_unavailable():
+def test_opportunity_mapping_survives_local_llm_unavailable():
     diagnosis = DiagnosisService().diagnose_project(_frame(), _semantics(), "project", {"time_column": "time"})
     opportunities = OpportunityService(enable_llm=False).identify(diagnosis.findings)
     assert opportunities
@@ -115,14 +115,14 @@ def test_opportunity_mapping_survives_local_qwen_unavailable():
     assert all(item.llm_explanation["status"] == "skipped" for item in opportunities)
 
 
-def test_opportunity_mapping_survives_mocked_qwen_failure():
-    class FailingQwen:
-        settings = SimpleNamespace(provider="ollama", model="qwen2.5:7b")
+def test_opportunity_mapping_survives_mocked_local_llm_failure():
+    class FailingLLM:
+        settings = SimpleNamespace(provider="ollama", model="local-model")
 
         def chat_json(self, *args, **kwargs):
             raise RuntimeError("Ollama is unavailable")
 
     diagnosis = DiagnosisService().diagnose_project(_frame(), _semantics(), "project", {"time_column": "time"})
-    opportunities = OpportunityService(FailingQwen()).identify(diagnosis.findings)
+    opportunities = OpportunityService(FailingLLM()).identify(diagnosis.findings)
     assert opportunities
     assert all(item.llm_explanation["status"] == "unavailable" for item in opportunities)

@@ -19,7 +19,7 @@ helpers/runners. It is a reference implementation and is not imported by formal 
 ## Formal migration
 
 - LLM configuration became a typed `Settings` object. Providers remain Ollama, OpenAI,
-  Gemini, Groq and OpenRouter. Defaults remain Ollama/qwen2.5:7b/local port 11434.
+  Gemini, Groq and OpenRouter. Defaults remain Ollama/local open-source LLM/local port 11434.
 - A provider-neutral LLM client keeps temperature 0 and seed 0 defaults. No keys are
   embedded.
 - The research semantic source and prompt/matching dependencies were copied into
@@ -48,7 +48,7 @@ helpers/runners. It is a reference implementation and is not imported by formal 
 ## Deliberate behavior changes
 
 1. Formal storage paths are relative to the new project settings, not the old absolute
-   `D:\...\LLM\output` paths.
+   machine-specific legacy output paths.
 2. The app defaults to conservative offline semantics so it works without Ollama. Users
    or experiments must deliberately select the research backend.
 3. Human corrections are stored in a separate table; the AI prediction is immutable.

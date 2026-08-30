@@ -158,21 +158,21 @@ BuildingAI 使用两层内部评测体系，目的分别是保证工程稳定性
 
 这套回归测试为确定性工程测试，不需要真实 LLM，因此 LLM 延迟为零是预期行为。
 
-### Local Qwen 端到端评测
+### 本地开源大模型端到端评测
 
-**52 个真实 Agent 场景**，模型为 **Qwen2.5-7B**。实际执行链路为：
+**52 个 Agent 场景**，使用用户自行配置的本地开源大模型。实际执行链路为：
 
 ```text
-用户问题 → Qwen → Agent → Tool Calling → RAG（需要时）→ 最终回答
+用户问题 → 本地开源大模型 → Agent → Tool Calling → RAG（需要时）→ 最终回答
 ```
 
-该运行记录了 44 次真实 Local Qwen 调用，平均 LLM 延迟约 2.94 秒。评测覆盖自然语言改写、多轮记忆、模糊问题、数据不足、未知设备、RAG、提示注入和工具降级。详细指标应被理解为 BuildingAI 自建内部测试的结果，而不是对所有建筑项目的泛化承诺。
+该运行记录了 44 次真实本地模型调用，平均 LLM 延迟约 2.94 秒。评测覆盖自然语言改写、多轮记忆、模糊问题、数据不足、未知设备、RAG、提示注入和工具降级。详细指标应被理解为 BuildingAI 自建内部测试的结果，而不是公开 benchmark 或对所有建筑项目的泛化承诺。
 
 ```powershell
 # 确定性 Agent 回归测试
 python scripts/run_agentic_evaluation.py
 
-# Local Qwen 端到端评测
+# 本地开源大模型端到端评测
 python scripts/run_e2e_agent_eval.py --quick
 python scripts/run_e2e_agent_eval.py --full
 ```
@@ -195,7 +195,7 @@ flowchart TB
         ANALYTICS[能源分析与诊断]
     end
     subgraph AI能力
-        LLM[Local Qwen / OpenAI-compatible]
+        LLM[local LLM / OpenAI-compatible]
         MEM[上下文记忆]
         RAG[知识库]
         TRACE[Trace 与 Evaluation]
@@ -221,7 +221,7 @@ flowchart TB
 
 ## 技术栈
 
-Python · PyQt5 · FastAPI · Pydantic · SQLite · Qwen2.5 · Ollama · RAG · pytest
+Python · PyQt5 · FastAPI · Pydantic · SQLite · 本地开源大模型 · Ollama · RAG · pytest
 
 ## 快速开始
 
@@ -236,11 +236,7 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-核心数据分析不依赖 LLM。若要启用本地 Qwen，请先安装 [Ollama](https://ollama.com/)，拉取模型后在应用的 **Settings** 中选择并测试连接：
-
-```powershell
-ollama pull qwen2.5:7b
-```
+核心数据分析不依赖 LLM。若要启用本地开源大模型，可安装 [Ollama](https://ollama.com/) 或使用兼容的本地接口，自行配置 `LLM_MODEL`，再在应用的 **Settings** 中选择并测试连接。仓库不会默认下载或指定某个模型。
 
 ```powershell
 # 运行测试
