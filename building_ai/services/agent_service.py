@@ -11,13 +11,14 @@ from building_ai.storage import ProjectStore, TimeseriesStore
 class AgentService:
     """Structured tool layer. LLM explanation can be added without exposing raw frames."""
 
-    def __init__(self, projects: ProjectStore, timeseries: TimeseriesStore, analysis_getter: Callable[[], Any] | None = None, equipment_getter: Callable[[], Any] | None = None, energy_getter: Callable[[], Any] | None = None, project_state_getter: Callable[[str, bool], dict] | None = None):
+    def __init__(self, projects: ProjectStore, timeseries: TimeseriesStore, analysis_getter: Callable[[], Any] | None = None, equipment_getter: Callable[[], Any] | None = None, energy_getter: Callable[[], Any] | None = None, project_state_getter: Callable[[str, bool], dict] | None = None, drawings=None):
         self.projects = projects
         self.timeseries = timeseries
         self.analysis_getter = analysis_getter
         self.equipment_getter = equipment_getter
         self.energy_getter = energy_getter
         self.project_state_getter = project_state_getter
+        self.drawings = drawings
         self.tools = ToolRegistry()
         self.tools.register("list_projects", self.list_projects)
         self.tools.register("get_project_summary", self.get_project_summary)
@@ -31,6 +32,10 @@ class AgentService:
         self.tools.register("get_energy_summary", self.get_energy_summary)
         self.tools.register("get_energy_timeseries", self.get_energy_timeseries)
         self.tools.register("get_temperature_summary", self.get_temperature_summary)
+        self.tools.register("list_project_drawings", self.list_project_drawings)
+        self.tools.register("get_drawing_detections", self.get_drawing_detections)
+        self.tools.register("get_drawing_summary", self.get_drawing_summary)
+        self.tools.register("get_equipment_drawing_location", self.get_equipment_drawing_location)
 
     def _state(self, project_id: str, require_analysis: bool = False) -> dict | None:
         return self.project_state_getter(project_id, require_analysis) if self.project_state_getter else None
@@ -172,3 +177,17 @@ class AgentService:
         result = state["energy"] if state else (self.energy_getter() if self.energy_getter else None)
         if result is None: return {"available": False, "reason": "Energy analysis has not been run for the current project."}
         return {"available": bool(result.temperature_series), "points": [{"name": x.name, "unit": x.unit, "equipment": x.equipment_name} for x in result.temperature_series]}
+
+    def list_project_drawings(self, project_id: str):
+        self._state(project_id); return self.drawings.list_drawings(project_id) if self.drawings else []
+
+    def get_drawing_detections(self, project_id: str):
+        self._state(project_id); return self.drawings.list_detections(project_id) if self.drawings else []
+
+    def get_drawing_summary(self, project_id: str):
+        self._state(project_id); return self.drawings.summary(project_id) if self.drawings else {"drawings": 0, "detections": 0, "review_status_counts": {}}
+
+    def get_equipment_drawing_location(self, project_id: str, equipment_id: str):
+        self._state(project_id)
+        locations = self.drawings.equipment_location(project_id, equipment_id) if self.drawings else []
+        return {"equipment_id": equipment_id, "locations": locations, "reliable": bool(locations), "reason": None if locations else "No confirmed drawing association exists for this equipment."}

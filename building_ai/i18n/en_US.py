@@ -1,7 +1,7 @@
 TRANSLATIONS = {
     "app_name": "BuildingAI",
     "dashboard": "Dashboard", "projects": "Projects", "import_data": "Import Data",
-    "semantic_mapping": "Semantic Mapping", "equipment": "Equipment", "energy_analysis": "Energy Analysis", "analysis": "Analysis",
+    "semantic_mapping": "Semantic Mapping", "equipment": "Equipment", "drawing_intelligence": "Drawing Intelligence", "energy_analysis": "Energy Analysis", "analysis": "Analysis",
     "energy_time_range": "Time range", "energy_range_all": "All", "energy_range_24h": "Last 24 hours", "energy_range_7d": "Last 7 days", "energy_range_30d": "Last 30 days", "energy_total": "Total energy", "energy_peak": "Peak demand", "energy_no_data": "Current data is insufficient for this analysis", "energy_quality_warning": "Data quality warning: {warnings}",
     "energy_metadata": "Data range: {start} – {end} · Interval: {interval} min · Equipment: {equipment} · Energy points: {energy} · Temperature points: {temperature} · Missing: {missing:.1%}",
     "energy_chart_energy": "Energy consumption trend", "energy_chart_power": "Power / load trend", "energy_chart_temperature": "Temperature trend", "energy_chart_delta_t": "ΔT trend", "energy_chart_cop": "COP trend", "energy_chart_profile": "Typical daily load profile", "energy_chart_heatmap": "Time × date load heatmap", "energy_chart_weather": "Energy versus outdoor temperature", "energy_chart_ranking": "Equipment energy ranking",

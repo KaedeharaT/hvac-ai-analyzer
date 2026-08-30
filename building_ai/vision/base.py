@@ -1,0 +1,16 @@
+from __future__ import annotations
+from abc import ABC, abstractmethod
+from pathlib import Path
+from .schemas import DrawingDetection, DrawingModelInfo
+
+class BaseDrawingDetector(ABC):
+    @abstractmethod
+    def is_available(self) -> bool: ...
+    @abstractmethod
+    def load_model(self) -> None: ...
+    @abstractmethod
+    def get_model_info(self) -> DrawingModelInfo: ...
+    @abstractmethod
+    def get_classes(self) -> tuple[str, ...]: ...
+    @abstractmethod
+    def detect(self, image: str | Path) -> list[DrawingDetection]: ...

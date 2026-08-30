@@ -1,6 +1,6 @@
 TRANSLATIONS = {
     "app_name": "BuildingAI", "dashboard": "总览", "projects": "项目", "import_data": "数据导入",
-    "semantic_mapping": "语义映射", "equipment": "设备", "energy_analysis": "能源分析", "analysis": "分析诊断", "agent": "AI 助手", "settings": "设置",
+    "semantic_mapping": "语义映射", "equipment": "设备", "drawing_intelligence": "图纸智能", "energy_analysis": "能源分析", "analysis": "分析诊断", "agent": "AI 助手", "settings": "设置",
     "energy_time_range": "时间范围", "energy_range_all": "全部", "energy_range_24h": "最近24小时", "energy_range_7d": "最近7天", "energy_range_30d": "最近30天", "energy_total": "总能耗", "energy_peak": "峰值功率", "energy_no_data": "当前数据不足以进行此项分析", "energy_quality_warning": "数据质量警告：{warnings}",
     "energy_metadata": "数据范围：{start} ～ {end} · 采样间隔：{interval} min · 可分析设备：{equipment} · 能源点位：{energy} · 温度点位：{temperature} · 缺失率：{missing:.1%}",
     "energy_chart_energy": "能源使用变化", "energy_chart_power": "设备用电负荷变化", "energy_chart_temperature": "温度变化趋势", "energy_chart_delta_t": "供回水温差变化", "energy_chart_cop": "设备运行效率变化", "energy_chart_profile": "一天中什么时候最耗电", "energy_chart_heatmap": "每天的高负荷时段", "energy_chart_weather": "室外温度变化对用电的影响", "energy_chart_ranking": "哪些设备最耗电",

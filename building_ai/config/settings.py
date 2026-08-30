@@ -42,6 +42,7 @@ class Settings:
     api_key: str = ""
     local_model_path: str = ""
     local_device: str = "auto"
+    drawing_model_path: str = ""
     language: str = "en"
     data_dir: Path = field(default_factory=lambda: user_config_dir() / "data")
     direct_prompt_version: str = "direct_v1_name"
@@ -77,6 +78,7 @@ class Settings:
             api_key=os.getenv("LLM_API_KEY", ""),
             local_model_path=os.getenv("LOCAL_MODEL_PATH", ""),
             local_device=os.getenv("LOCAL_LLM_DEVICE", "auto"),
+            drawing_model_path=os.getenv("BUILDING_AI_DRAWING_MODEL", ""),
             language=os.getenv("BUILDING_AI_LANGUAGE", "en"),
             data_dir=Path(os.getenv("BUILDING_AI_DATA_DIR", str(user_config_dir() / "data"))),
             direct_prompt_version=os.getenv("DIRECT_PROMPT_VERSION", "direct_v1_name"),

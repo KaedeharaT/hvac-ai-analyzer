@@ -28,12 +28,12 @@ BuildingAI 的目标，是让系统自动完成一条可审查的分析路径：
 
 ```mermaid
 flowchart LR
-    A[原始 BEMS 数据] --> B[语义理解]
-    B --> C[设备识别]
-    C --> D[KPI 与能源分析]
-    D --> E[运行诊断]
-    E --> F[节能建议]
-    F --> G[AI Assistant]
+    A[BEMS 数据] --> B[语义理解]
+    B --> C[项目智能]
+    X[图纸] --> Y[图纸智能识别]
+    Y --> C
+    C --> D[能源分析 / 诊断]
+    D --> E[AI Assistant]
 ```
 
 它不是单纯的聊天机器人。项目数据决定当前建筑**发生了什么**；AI 的作用是组织分析、补充证据、解释结果，并把工程判断转化为用户可以执行的下一步。
@@ -76,6 +76,16 @@ flowchart LR
 系统会查询当前项目数据、检查现有证据，必要时补充分析，并结合建筑运行知识库生成有依据的回答。
 
 ![AI Assistant 中的真实参考资料卡片](docs/images/ai-assistant.png)
+
+### 图纸智能识别
+
+BuildingAI 可通过可选 YOLO 视觉适配器识别建筑 / HVAC 图纸中的构件。检测结果先作为 AI Prediction 保存，人工确认后才能用于设备关联。确认后的图纸对象可以与 BuildingAI Equipment 建立关系，Agent 可以只读查询设备在图纸中的关联信息。
+
+![图纸智能识别中的合成演示图纸](docs/images/drawing-intelligence.png)
+
+*合成演示图纸。当前旧研究模型支持空调设备（`aircon`）、基准标记（`baseline_mark`）和窗（`window`）；模型权重不随仓库发布。设备与图纸对象的关联必须人工确认，不是自动匹配。*
+
+例如询问 “AHP-3-3 在图纸上的什么位置？”，Agent 只会读取已确认的图纸关联并返回图纸、页码和对象信息；若尚未确认关联，则明确拒答：`No reliable drawing association has been confirmed for this equipment.`
 
 ## Agent 如何完成一次分析
 

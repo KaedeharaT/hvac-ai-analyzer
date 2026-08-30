@@ -17,6 +17,7 @@ from building_ai.services.opportunity_service import OpportunityService
 from building_ai.services.consistency_validation import validate_analysis
 from building_ai.services.energy_analysis_service import EnergyAnalysisResult, EnergyAnalysisService
 from building_ai.services.interpretation_service import InterpretationService
+from building_ai.services.drawing_service import DrawingService
 from building_ai.storage import (
     ConfirmedMappingStore, Database, DuplicateImportError, ProjectDataStore,
     ProjectStore, TimeseriesStore,
@@ -30,6 +31,7 @@ class ApplicationContext:
         self.projects = ProjectStore(self.database)
         self.timeseries = TimeseriesStore(self.settings.timeseries_dir)
         self.project_data = ProjectDataStore(self.settings.timeseries_dir)
+        self.drawings = DrawingService(self.database, self.settings.timeseries_dir)
         self.confirmed_mappings = ConfirmedMappingStore(self.settings.confirmed_dataset_path)
         self.importer = ImportService()
         self.semantics = SemanticService(self.settings)
@@ -40,7 +42,7 @@ class ApplicationContext:
         self.interpretation = InterpretationService()
         self.diagnosis = DiagnosisService(self.analytics, self.equipment_service)
         self.opportunities_service = OpportunityService(self.llm_manager)
-        self.agent = AgentService(self.projects, self.timeseries, lambda: self.diagnosis_result, lambda: self.equipment_organization, lambda: self.energy_analysis_result, self.agent_project_state)
+        self.agent = AgentService(self.projects, self.timeseries, lambda: self.diagnosis_result, lambda: self.equipment_organization, lambda: self.energy_analysis_result, self.agent_project_state, self.drawings)
         self.current_project: Project | None = None
         self.dataframe: pd.DataFrame | None = None
         self.semantic_result: AnalysisResult | None = None
