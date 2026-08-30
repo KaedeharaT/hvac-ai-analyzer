@@ -122,10 +122,12 @@ See the complete [source registry, usage notes, and rebuild policy](docs/knowled
 
 BuildingAI uses a two-layer **internal evaluation suite**, not a public benchmark.
 
+The LLM layer is configurable and model-agnostic. Qwen is currently used as one local evaluation model, but the application and Agent logic are not tied to it. Any provider or model change requires a fresh end-to-end evaluation; the metrics below describe only the documented Qwen configuration.
+
 | Layer | Purpose | Current documented run |
 | --- | --- | --- |
 | **Deterministic Agent Regression Suite** | Fast engineering regression for routing, tool calling, grounding, abstention, memory, RAG retrieval, tool failure, and prompt-injection boundaries. | 66 cases. |
-| **Local LLM End-to-End Evaluation** | Executes the complete bounded Agent path with a locally configured open-source LLM, including tools, evidence checks, RAG where relevant, and final-answer generation. | 52 cases; 44 real LLM calls; average LLM latency 2.94 s. |
+| **Local LLM End-to-End Evaluation** | Executes the complete bounded Agent path with a locally configured open-source LLM, including tools, evidence checks, RAG where relevant, and final-answer generation. | 52 cases; Qwen2.5-7B test configuration; 44 real LLM calls; average LLM latency 2.94 s. |
 
 The end-to-end suite contains natural-language paraphrases, multi-turn memory, ambiguous requests, missing-data and unknown-equipment abstention, prompt injection, RAG, and tool-degradation cases. During a documented four-round refinement run, routing improved from **58.8% in Round 1** to **100% in Round 4** on that internal run through failure-case analysis. A later fixed 52-case report measured **98.1% task success** and **98.1% tool-selection accuracy**; results are reported as internal measurements, not claims of generalization.
 
