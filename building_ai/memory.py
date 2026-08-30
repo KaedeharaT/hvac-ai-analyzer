@@ -10,3 +10,11 @@ class MemoryStore:
  def get(self,project_id,conversation_id,kind,key):
   with self.database.connect() as c:r=c.execute('SELECT payload FROM agent_memory WHERE project_id=? AND conversation_id=? AND kind=? AND key=?',(project_id,conversation_id,kind,key)).fetchone()
   return json.loads(r['payload']) if r else None
+ def delete(self,project_id,conversation_id,kind,key):
+  """Remove a user-cleared, conversation-scoped focus value."""
+  with self.database.connect() as c:c.execute('DELETE FROM agent_memory WHERE project_id=? AND conversation_id=? AND kind=? AND key=?',(project_id,conversation_id,kind,key))
+ def put_project(self,project_id,key,value):
+  """Persist project facts separately from a user conversation."""
+  self.put(project_id,'__project__','project',key,value)
+ def get_project(self,project_id,key):
+  return self.get(project_id,'__project__','project',key)

@@ -16,13 +16,16 @@ from PyQt5.QtWidgets import (
 )
 
 from building_ai.i18n import LanguageManager, tr
+from building_ai.agent_runtime import AgentRuntime
+from building_ai.memory import MemoryStore
+from building_ai.observability import TraceStore
 from building_ai.core.equipment_identity import normalize_equipment_id
 from building_ai.llm import apply_detected_local_qwen, discover_local_qwen
 from building_ai.models import SemanticStatus, TAXONOMY
 from building_ai.storage import DuplicateImportError
 from building_ai.ui.theme import SPACING_XS, SPACING_LG, SPACING_MD, SPACING_SM
 from building_ai.ui.analysis_renderer import finding_text, opportunity_impact_text, opportunity_priority_text, opportunity_text, reason_text
-from building_ai.ui.agent_chat import ChatInput, ChatMessage, ChatTranscript, ToolCallWidget
+from building_ai.ui.agent_chat import AgentEvidenceCard, AgentProcessCard, AgentSourcesCard, ChatInput, ChatMessage, ChatTranscript, ToolCallWidget
 from building_ai.ui.pages.energy_analysis_page import EnergyAnalysisPage
 from building_ai.ui.pages.energy_analysis_page import TimeSeriesChart
 from building_ai.ui.components import SectionHeader, StatusBadge
@@ -33,7 +36,7 @@ LOGGER = logging.getLogger(__name__)
 
 class AgentWorker(QThread):
     tool_event = pyqtSignal(str, str)
-    completed = pyqtSignal(str)
+    completed = pyqtSignal(object)
     failed = pyqtSignal()
 
     def __init__(self, handler, message: str):
@@ -41,7 +44,7 @@ class AgentWorker(QThread):
 
     def run(self):
         try:
-            self.completed.emit(self.handler(self.message, lambda name, state: self.tool_event.emit(name, state)))
+            self.completed.emit(self.handler(self.message))
         except Exception:
             self.failed.emit()
 
@@ -877,19 +880,24 @@ class AgentPage(BasePage):
 
     def __init__(self, context):
         super().__init__(context, "agent")
-        self._message_handler = context.agent_controller.answer
         self._agent_worker = None
         self._tool_calls: dict[str, ToolCallWidget] = {}
         self._tool_call_sequence = 0
         self._welcome_added = False
         self._user_message_count = 0
+        self._active_project_id = None
+        self._conversation_id = "gui-no-project"
+        self._current_process = None
+        self._request_started = 0.0
 
         header = QFrame(); header.setObjectName("Card")
         header_layout = QHBoxLayout(header); header_layout.setContentsMargins(SPACING_MD, SPACING_SM, SPACING_MD, SPACING_SM)
         self.project_status = QLabel(); self.project_status.setObjectName("Muted")
+        self.focus_status = QLabel(); self.focus_status.setObjectName("Muted")
+        self.clear_focus_button = QPushButton(); self.clear_focus_button.setObjectName("TextButton"); self.clear_focus_button.clicked.connect(self.clear_focus)
         self.model_status = QLabel(); self.model_status.setObjectName("Muted")
         self.agent_status = QLabel(); self.agent_status.setObjectName("Muted")
-        header_layout.addWidget(self.project_status); header_layout.addStretch(1); header_layout.addWidget(self.model_status); header_layout.addWidget(self.agent_status)
+        header_layout.addWidget(self.project_status); header_layout.addWidget(self.focus_status); header_layout.addWidget(self.clear_focus_button); header_layout.addStretch(1); header_layout.addWidget(self.model_status); header_layout.addWidget(self.agent_status)
         self.layout.addWidget(header)
 
         body = QHBoxLayout(); body.setSpacing(SPACING_MD)
@@ -931,12 +939,17 @@ class AgentPage(BasePage):
         self.tools_title.setText(tr("agent_context_title"))
         self.tools_list.setText(tr("agent_context_text"))
         self._render_suggestions()
-        self.refresh()
+        self.refresh(); self._set_focus(getattr(self, '_focus', None))
 
     def refresh(self):
         if not hasattr(self, "input"):
             return
         project = self.context.current_project
+        project_id = project.project_id if project else None
+        if project_id != self._active_project_id:
+            self._active_project_id = project_id
+            self._conversation_id = f"gui-{project_id or 'no-project'}-{int(time.monotonic() * 1000)}"
+            self._set_focus(None)
         self.project_status.setText(f"{tr('current_project')}: {project.name if project else tr('no_project')}")
         provider = self.context.llm_manager.get_provider()
         if provider.is_configured:
@@ -952,6 +965,27 @@ class AgentPage(BasePage):
             self.setup_notice.setVisible(True)
             self.set_input_enabled(False)
         self._update_send_state()
+
+    def _set_focus(self, equipment: str | None) -> None:
+        self._focus = equipment
+        if equipment:
+            self.focus_status.setText(f"{tr('agent_focus')}: {equipment}")
+            self.clear_focus_button.setText("× " + tr("agent_clear_focus")); self.clear_focus_button.setVisible(True)
+        else:
+            self.focus_status.setText(""); self.clear_focus_button.setVisible(False)
+
+    def _refresh_focus(self) -> None:
+        project = self.context.current_project
+        if not project:
+            self._set_focus(None); return
+        value = MemoryStore(self.context.database).get(project.project_id, self._conversation_id, 'focus', 'equipment')
+        self._set_focus(value.get('equipment_id') if value else None)
+
+    def clear_focus(self) -> None:
+        project = self.context.current_project
+        if project:
+            MemoryStore(self.context.database).delete(project.project_id, self._conversation_id, 'focus', 'equipment')
+        self._set_focus(None)
 
     def _ensure_welcome(self) -> None:
         if self._welcome_added:
@@ -973,7 +1007,12 @@ class AgentPage(BasePage):
         layout = QVBoxLayout(self.suggestions); layout.setContentsMargins(SPACING_SM, SPACING_SM, SPACING_SM, SPACING_SM)
         self.suggestion_title = QLabel(tr("recommended_questions")); self.suggestion_title.setObjectName("CardTitle"); layout.addWidget(self.suggestion_title)
         self.suggestion_buttons = []
-        for key in ("agent_question_cop", "agent_question_review", "agent_question_summary", "agent_question_findings"):
+        keys = ["agent_question_summary"]
+        diagnosis = getattr(self.context, 'diagnosis_result', None)
+        if diagnosis and diagnosis.analytics.available_kpis: keys.append("agent_question_cop")
+        if diagnosis and diagnosis.findings: keys.append("agent_question_findings")
+        if not diagnosis: keys.append("agent_question_review")
+        for key in keys:
             button = QPushButton(tr(key)); button.setObjectName("SuggestionButton"); button.setProperty("translation_key", key)
             button.clicked.connect(lambda checked=False, text_key=key: self.fill_suggestion(text_key))
             self.suggestion_buttons.append(button); layout.addWidget(button)
@@ -1035,9 +1074,13 @@ class AgentPage(BasePage):
         self.append_user_message(text); self.input.clear(); self.message_submitted.emit(text)
         self.set_agent_status("agent_analyzing")
         self.set_input_enabled(False)
-        self._tool_handles = {}
-        self._agent_worker = AgentWorker(self._message_handler, text)
-        self._agent_worker.tool_event.connect(self._agent_tool_event)
+        project = self.context.current_project
+        project_id = project.project_id if project else None
+        runtime = AgentRuntime(self.context)
+        route = runtime.route(text); plan = runtime.plan(route, project_id) if project_id else None
+        self._current_process = AgentProcessCard(route, plan); self.transcript.append(self._current_process); self.transcript.scroll_to_bottom(self.chat_scroll)
+        self._request_started = time.monotonic()
+        self._agent_worker = AgentWorker(lambda message: AgentRuntime(self.context).run(message, project_id, self._conversation_id), text)
         self._agent_worker.completed.connect(self._agent_completed)
         self._agent_worker.failed.connect(self._agent_failed)
         self._agent_worker.start()
@@ -1049,8 +1092,50 @@ class AgentPage(BasePage):
         else:
             self.update_tool_call(handle, state)
 
-    def _agent_completed(self, response: str) -> None:
-        self.append_assistant_message(response); self.set_agent_status(""); self.set_input_enabled(True); self._agent_worker = None
+    def _project_evidence_lines(self, trace: dict) -> list[str]:
+        project = self.context.current_project
+        if not project:
+            return []
+        lines = [f"{tr('current_project')}: {project.name}"]
+        diagnosis = self.context.diagnosis_result
+        if diagnosis:
+            focus = getattr(self, '_focus', None)
+            kpis = [item for item in diagnosis.analytics.equipment_kpis if not focus or item.equipment_name == focus]
+            for item in kpis[:1]:
+                metrics = item.metric_summary; cop = metrics.get('cop', {}).get('mean'); delta_t = metrics.get('delta_t_c', {}).get('mean')
+                if isinstance(cop, (int, float)): lines.append(f"{item.equipment_name} · COP: {cop:.2f}")
+                if isinstance(delta_t, (int, float)): lines.append(f"{item.equipment_name} · ΔT: {delta_t:.2f} °C")
+            findings = diagnosis.findings
+            if findings: lines.append(f"{len(findings)} {tr('analysis_findings').lower()}")
+        return lines
+
+    def _append_context_actions(self, trace: dict) -> None:
+        tools = {item.get('tool') for item in trace.get('tool_calls', [])}
+        actions = []
+        window = self.window()
+        if getattr(self, '_focus', None): actions.append((tr('equipment'), 4))
+        if {'get_diagnostic_findings', 'get_analysis_results'} & tools: actions.append((tr('analysis'), 6))
+        if {'get_energy_summary', 'get_energy_timeseries'} & tools: actions.append((tr('energy_analysis'), 5))
+        if not actions or not hasattr(window, 'change_page'): return
+        row = QHBoxLayout(); row.setSpacing(SPACING_SM)
+        for label, page_index in actions[:3]:
+            button = QPushButton(label); button.setObjectName('TextButton'); button.clicked.connect(lambda checked=False, index=page_index: window.change_page(index)); row.addWidget(button)
+        row.addStretch(1); holder = QFrame(); holder.setLayout(row); self.transcript.append(holder)
+
+    def _agent_completed(self, response) -> None:
+        trace = TraceStore(self.context.database).get(response.trace_id)
+        elapsed_ms = (time.monotonic() - self._request_started) * 1000
+        if self._current_process and trace:
+            self._current_process.complete(trace, elapsed_ms)
+        self._refresh_focus()
+        self.append_assistant_message(response.answer)
+        if trace:
+            evidence = self._project_evidence_lines(trace)
+            if evidence and response.grounded: self.transcript.append(AgentEvidenceCard(evidence))
+            if response.sources: self.transcript.append(AgentSourcesCard(response.sources))
+            self._append_context_actions(trace)
+        self.transcript.scroll_to_bottom(self.chat_scroll)
+        self.set_agent_status(""); self.set_input_enabled(True); self._agent_worker = None; self._current_process = None
 
     def _agent_failed(self) -> None:
         self.append_assistant_message("", translation_key="agent_backend_failed"); self.set_agent_status(""); self.set_input_enabled(True); self._agent_worker = None

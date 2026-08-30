@@ -32,3 +32,19 @@ paper_research_archive_*/
 analysis_ui_preview.png
 .pytest_cache/
 artifacts/
+
+# Release hygiene: local IDE state, packaged output, model weights, and private
+# user-supplied knowledge must never enter the public source repository.
+.idea/
+.vscode/
+build/
+dist/
+*.egg-info/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+models/
+.ollama/
+ollama_models/
+knowledge/private/
+knowledge/imports/

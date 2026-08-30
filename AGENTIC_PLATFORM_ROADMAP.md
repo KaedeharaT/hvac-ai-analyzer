@@ -23,10 +23,10 @@ All entries below remain **FAIL** until the acceptance runner has a real test
 or runtime artifact for it.  No interface/class alone is evidence.
 
 ### Task infrastructure
-- [ ] Redis Queue Adapter — production adapter plus local fallback test.
+- [x] Redis Queue Adapter — production adapter plus local fallback test.
 - [ ] WAITING_REVIEW / Review Resume — persisted review payload and resume test.
-- [ ] Retry — bounded retry count / error persistence test.
-- [ ] Timeout — task/tool timeout test.
+- [x] Retry — bounded retry count / error persistence test.
+- [x] Timeout — task/tool timeout test.
 - [ ] Concurrent idempotency — concurrent submit returns one task.
 
 ### Agent runtime
@@ -36,30 +36,44 @@ or runtime artifact for it.  No interface/class alone is evidence.
 - [ ] Reflection / Re-plan — persisted trace `PARTIAL -> REPLAN -> SUFFICIENT`.
 
 ### Memory
-- [ ] Conversation Memory — pronoun follow-up real runtime case.
-- [ ] Project Memory — scoped facts/findings/analysis summary.
-- [ ] Cross-project isolation — no memory or equipment leakage.
+- [x] Conversation Memory — pronoun follow-up real runtime case.
+- [x] Project Memory — scoped facts/findings/analysis summary.
+- [x] Cross-project isolation — no memory or equipment leakage.
 
 ### RAG and knowledge
-- [ ] Ingestion, chunking, metadata and retrieval.
-- [ ] `search_knowledge` Agent tool and citation.
+- [x] Ingestion, chunking, metadata and retrieval.
+- [x] `search_knowledge` Agent tool and citation.
 - [ ] Knowledge source registry and `docs/knowledge_sources.md`.
 - [ ] Source tracks: Haystack, Brick, Open223, DOE FEMP, NREL BCL, EnergyPlus.
 
 ### Observability and evaluation
-- [ ] Persistent Agent Trace, Tool Trace, LLM Trace, Evidence Trace.
+- [x] Persistent Agent Trace, Tool Trace, LLM Trace, Evidence Trace.
 - [ ] `GET /traces`, `GET /traces/{trace_id}`.
-- [ ] Eval dataset (>=60 meaningful cases) and deterministic runner.
-- [ ] Routing, tool selection, grounding, hallucination, abstention and failure metrics.
+- [x] Eval dataset (>=60 meaningful cases) and deterministic runner.
+- [x] Routing, tool selection, grounding, hallucination, abstention and failure metrics.
 
 ### Security and infrastructure
-- [ ] READ_ONLY / WRITE / DANGEROUS tool permission enforcement.
-- [ ] User/BEMS/RAG prompt-injection tests.
-- [ ] Trace/log secret redaction tests.
+- [x] READ_ONLY / WRITE / DANGEROUS tool permission enforcement.
+- [x] User/BEMS/RAG prompt-injection tests.
+- [x] Trace/log secret redaction tests.
 - [ ] Docker / Redis compose plus environment-specific runtime status.
 
 ## Last validation
 
-2026-08-30: `python -m pytest` completed with **76 passed**.  Uvicorn health
-and Project 7 task endpoint were previously exercised.  The acceptance script
-is authoritative for subsequent status.
+2026-08-30: The bounded runtime now rejects user instruction overrides before
+tool or LLM dispatch, treats BEMS/RAG content as untrusted data, enforces its
+READ_ONLY tool boundary, and redacts secrets recursively before trace storage.
+Actual LLM invocation metadata is persisted without prompt or response content.
+The deterministic runtime evaluation includes 68 generic cases covering route,
+tool selection, grounding, hallucination avoidance, abstention, and failure
+safety. Full validation completed with **90 passed**; acceptance reported
+**26 PASS / 0 FAIL / 0 ENVIRONMENT_BLOCKED**.
+
+2026-08-30: Redis/RQ dispatch now uses an importable worker entry point while
+local development remains on the in-process queue. Retry count and error
+persistence are covered by the task state-machine suite. Conversation and
+project memory are scope-isolated; the knowledge service chunks sources and
+returns provenance-bearing citations through the Agent runtime. Full
+validation completed with **84 passed**; acceptance reported **21 PASS / 5
+FAIL / 0 ENVIRONMENT_BLOCKED**. The acceptance script remains authoritative
+for subsequent recorded counts.

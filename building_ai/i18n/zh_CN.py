@@ -83,4 +83,9 @@ TRANSLATIONS = {
     "opportunity_priority_p1": "高", "opportunity_priority_p2": "中", "opportunity_priority_p3": "低",
     "opportunity_schedule_control_title": "优化非工作时段运行", "opportunity_schedule_control_description": "确认需求后，检查时间表、节假日、手动覆盖和停机顺序。",
     "opportunity_staging_control_title": "改善运行与分级策略", "opportunity_staging_control_description": "检查机组分级、最小负荷、变频设置和温度设定值。",
+    "agent_analyzing_question": "正在分析你的问题…", "agent_understanding": "正在理解你的问题", "agent_process_complete": "分析完成 · 使用 {tools} 个数据工具 · {sources} 个知识来源 · {seconds:.1f} 秒",
+    "agent_view_process": "查看分析过程", "agent_hide_process": "收起分析过程", "agent_view_technical": "查看技术详情", "agent_hide_technical": "收起技术详情",
+    "agent_completed": "分析完成", "agent_partial_data": "部分数据未能读取，已使用其他可用信息继续分析", "agent_need_more_evidence": "当前信息还不足以判断具体原因", "agent_evidence_completed": "已补充检查运行数据", "agent_knowledge_checked": "已查询相关运行知识",
+    "agent_sources": "参考资料", "agent_view_source_details": "查看来源详情", "agent_hide_source_details": "收起来源详情", "agent_project_evidence": "项目证据", "agent_focus": "当前关注", "agent_clear_focus": "清除关注",
+    "agent_step_get_project_summary": "已读取当前项目", "agent_step_get_equipment_summary": "正在查看可用设备", "agent_step_get_analysis_results": "正在检查分析结果", "agent_step_get_equipment_kpis": "正在查看设备运行指标", "agent_step_get_diagnostic_findings": "正在核对诊断证据", "agent_step_get_energy_timeseries": "正在对比运行趋势", "agent_step_get_energy_summary": "正在查看能耗情况", "agent_step_get_temperature_summary": "正在查看温度信息", "agent_step_get_energy_opportunities": "正在检查节能机会", "agent_step_search_knowledge": "正在查询建筑运行知识库", "agent_step_get_semantic_mapping": "正在核对数据映射", "agent_step_get_point_timeseries": "正在查看测量数据",
 }

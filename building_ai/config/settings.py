@@ -45,6 +45,8 @@ class Settings:
     language: str = "en"
     data_dir: Path = field(default_factory=lambda: user_config_dir() / "data")
     direct_prompt_version: str = "direct_v1_name"
+    task_queue_backend: str = "local"
+    redis_url: str = "redis://localhost:6379/0"
 
     def __post_init__(self) -> None:
         self.data_dir = Path(self.data_dir)
@@ -57,6 +59,9 @@ class Settings:
         self.ollama_url = self.ollama_url.rstrip("/")
         self.api_base = self.api_base.rstrip("/")
         self.language = "zh_CN" if self.language in {"zh", "zh_CN"} else "en_US" if self.language in {"en", "en_US"} else self.language
+        self.task_queue_backend = self.task_queue_backend.strip().lower()
+        if self.task_queue_backend not in {"local", "redis"}:
+            raise ValueError("TASK_QUEUE_BACKEND must be 'local' or 'redis'")
         if self.direct_prompt_version not in DIRECT_PROMPT_VERSIONS:
             raise ValueError(f"Unsupported Direct Prompt version: {self.direct_prompt_version}")
 
@@ -73,6 +78,8 @@ class Settings:
             language=os.getenv("BUILDING_AI_LANGUAGE", "en"),
             data_dir=Path(os.getenv("BUILDING_AI_DATA_DIR", str(user_config_dir() / "data"))),
             direct_prompt_version=os.getenv("DIRECT_PROMPT_VERSION", "direct_v1_name"),
+            task_queue_backend=os.getenv("BUILDING_AI_TASK_QUEUE", "local"),
+            redis_url=os.getenv("BUILDING_AI_REDIS_URL", "redis://localhost:6379/0"),
         )
 
     @property
