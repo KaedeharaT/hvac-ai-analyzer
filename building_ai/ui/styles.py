@@ -30,6 +30,9 @@ def application_stylesheet() -> str:
     QLabel#AgentProcessSummary {{ color: {c['primary']}; font-weight: 650; background: transparent; }}
     QFrame#AgentEvidenceCard {{ background: #F8FAFC; border: 1px solid {c['border']}; border-radius: {RADIUS_SM}px; }}
     QFrame#AgentSourcesCard {{ background: #FBFAF6; border: 1px solid #E7DDBD; border-radius: {RADIUS_SM}px; }}
+    QFrame#KnowledgeCitationRow {{ background: #FFFDF6; border: 1px solid #EEE6CF; border-radius: {RADIUS_SM}px; }}
+    QFrame#KnowledgeResultCard {{ background: {c['surface']}; border: 1px solid {c['border']}; border-radius: {RADIUS_MD}px; }}
+    QLabel#KnowledgeCategoryBadge {{ background: #F1F5F9; color: #475569; border-radius: 10px; padding: 5px 9px; font-size: 11px; font-weight: 600; }}
     QFrame#AgentSetupNotice {{ background: #FFFBEB; border: 1px solid #FDE68A; border-radius: {RADIUS_MD}px; }}
     QFrame#AgentSuggestions {{ background: #F8FAFC; border: 1px solid {c['border']}; border-radius: {RADIUS_MD}px; }}
     QLabel#CardValue {{ font-size: {FONT_METRIC}px; font-weight: 700; background: transparent; }}

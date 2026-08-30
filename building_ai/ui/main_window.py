@@ -13,6 +13,7 @@ from .pages import (
     AgentPage, AnalyticsPage, DashboardPage, DataPage, EnergyAnalysisPage, EquipmentPage,
     ProjectsPage, SemanticsPage, SettingsPage,
 )
+from .pages.knowledge_page import KnowledgeBasePage
 from .styles import application_stylesheet
 from .theme import SPACING_LG, SPACING_MD, SPACING_SM
 from .components import StatusBadge
@@ -25,12 +26,12 @@ class MainWindow(QMainWindow):
         ("▦", "dashboard", DashboardPage), ("▣", "projects", ProjectsPage),
         ("⇧", "import_data", DataPage), ("◇", "semantic_mapping", SemanticsPage),
         ("⌘", "equipment", EquipmentPage), ("▤", "energy_analysis", EnergyAnalysisPage), ("▤", "analysis", AnalyticsPage),
-        ("✦", "agent", AgentPage), ("⚙", "settings", SettingsPage),
+        ("✦", "agent", AgentPage), ("◫", "knowledge_base", KnowledgeBasePage), ("⚙", "settings", SettingsPage),
     )
     NAV_GROUPS = {0: "nav_overview", 1: "nav_data", 5: "nav_analytics", 7: "nav_ai"}
     NAV_ICONS = (QStyle.SP_DesktopIcon, QStyle.SP_DirIcon, QStyle.SP_DialogOpenButton,
                  QStyle.SP_FileDialogDetailedView, QStyle.SP_ComputerIcon, QStyle.SP_FileDialogContentsView,
-                 QStyle.SP_MessageBoxInformation, QStyle.SP_DialogHelpButton, QStyle.SP_FileDialogInfoView)
+                 QStyle.SP_MessageBoxInformation, QStyle.SP_DialogHelpButton, QStyle.SP_DirOpenIcon, QStyle.SP_FileDialogInfoView)
 
     def __init__(self, context: ApplicationContext | None = None):
         super().__init__()
@@ -88,7 +89,7 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
         self.project_label = StatusBadge(); layout.addWidget(self.project_label)
         self.data_label = StatusBadge(); layout.addWidget(self.data_label)
-        self.llm_label = StatusBadge(); self.llm_label.setCursor(Qt.PointingHandCursor); self.llm_label.mousePressEvent = lambda event: self.change_page(8); layout.addWidget(self.llm_label)
+        self.llm_label = StatusBadge(); self.llm_label.setCursor(Qt.PointingHandCursor); self.llm_label.mousePressEvent = lambda event: self.change_page(next(index for index, (_, key, _) in enumerate(self.NAVIGATION) if key == "settings")); layout.addWidget(self.llm_label)
         self.language_button = QPushButton(); self.language_button.clicked.connect(self.toggle_language); layout.addWidget(self.language_button)
         return bar
 

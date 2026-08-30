@@ -1105,6 +1105,12 @@ class AgentPage(BasePage):
                 metrics = item.metric_summary; cop = metrics.get('cop', {}).get('mean'); delta_t = metrics.get('delta_t_c', {}).get('mean')
                 if isinstance(cop, (int, float)): lines.append(f"{item.equipment_name} · COP: {cop:.2f}")
                 if isinstance(delta_t, (int, float)): lines.append(f"{item.equipment_name} · ΔT: {delta_t:.2f} °C")
+                # Low-ΔT occurrence belongs to the formal diagnostic finding,
+                # while the KPI summary holds the mean. Keep both project-data
+                # facts visible without deriving a finding from RAG content.
+                low_delta = next((finding for finding in diagnosis.findings if finding.equipment_id == item.equipment_id and finding.finding_type == 'low_chilled_water_delta_t'), None)
+                if low_delta and low_delta.valid_sample_count:
+                    lines.append(f"{tr('analysis_metric_low_delta_t_samples')}: {low_delta.occurrence_count} / {low_delta.valid_sample_count}")
             findings = diagnosis.findings
             if findings: lines.append(f"{len(findings)} {tr('analysis_findings').lower()}")
         return lines
@@ -1132,7 +1138,7 @@ class AgentPage(BasePage):
         if trace:
             evidence = self._project_evidence_lines(trace)
             if evidence and response.grounded: self.transcript.append(AgentEvidenceCard(evidence))
-            if response.sources: self.transcript.append(AgentSourcesCard(response.sources))
+            if response.sources: self.transcript.append(AgentSourcesCard(response.sources, trace))
             self._append_context_actions(trace)
         self.transcript.scroll_to_bottom(self.chat_scroll)
         self.set_agent_status(""); self.set_input_enabled(True); self._agent_worker = None; self._current_process = None
