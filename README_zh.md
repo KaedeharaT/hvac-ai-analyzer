@@ -6,6 +6,8 @@
 
 BuildingAI 面向真实建筑运行数据，结合工程规则、LLM、工具调用与知识检索，实现从陌生 BEMS 数据理解到设备级能源诊断和节能建议生成的完整智能分析流程。
 
+[![CI](https://github.com/KaedeharaT/hvac-ai-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/KaedeharaT/hvac-ai-analyzer/actions/workflows/ci.yml)
+
 **简体中文 | [English](README.md)** · [架构说明](docs/architecture.md) · [知识来源](docs/knowledge_sources.md)
 
 ![BuildingAI 总览](docs/images/dashboard.png)
@@ -259,3 +261,7 @@ python -m uvicorn building_ai.api.app:app --host 127.0.0.1 --port 8000
 BuildingAI 源于对异构 HVAC / BEMS 运行数据自动语义解释的研究，并将研究方法落实为可运行的桌面应用、Agent 工作流、知识库、评测和可观测性能力。
 
 这是一个工程平台 / 研究原型，不替代现场调试或生产 BAS 控制器。COP、诊断与节能建议在落地前均应结合真实建筑进行现场验证。
+
+## 许可证
+
+代码以 [MIT License](LICENSE) 发布。第三方知识来源继续遵循其原始使用条款，详见 [docs/knowledge_sources.md](docs/knowledge_sources.md)。

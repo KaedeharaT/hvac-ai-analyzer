@@ -7,6 +7,7 @@ Turn heterogeneous BEMS data into understandable energy insights, equipment diag
 面向异构建筑运行数据的智能能源分析与 Agent 应用平台。
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![CI](https://github.com/KaedeharaT/hvac-ai-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/KaedeharaT/hvac-ai-analyzer/actions/workflows/ci.yml)
 ![PyQt5](https://img.shields.io/badge/Desktop-PyQt5-41CD52)
 ![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)
 ![Local LLM](https://img.shields.io/badge/LLM-Local%20open--source-6B4FBB)
@@ -255,3 +256,7 @@ It is an engineering platform / research prototype, not a replacement for site c
 - [Knowledge source registry and licensing](docs/knowledge_sources.md)
 - [Research-to-product mapping](docs/research_to_product.md)
 - [Migration notes](docs/migration.md)
+
+## License
+
+Code is released under the [MIT License](LICENSE). Third-party knowledge sources retain their original terms; see [docs/knowledge_sources.md](docs/knowledge_sources.md).
