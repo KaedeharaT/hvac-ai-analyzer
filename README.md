@@ -38,12 +38,12 @@ It is not a generic chatbot and it has no BAS write path. The project reads, ana
 
 ```mermaid
 flowchart LR
-    A[BEMS CSV / Excel] --> B[Semantic understanding]
-    B --> C[Equipment discovery]
-    C --> D[Energy & KPI analytics]
-    D --> E[Diagnostics]
-    E --> F[Actionable recommendations]
-    F --> G[AI Assistant]
+    A[BEMS data] --> B[Semantic understanding]
+    B --> C[Project intelligence]
+    X[Drawings] --> Y[Drawing intelligence]
+    Y --> C
+    C --> D[Analytics / diagnosis]
+    D --> E[AI Assistant]
 ```
 
 ## Product experience
@@ -65,6 +65,16 @@ The Assistant shows a concise analysis process, separates **Project evidence** f
 The built-in knowledge page provides a friendly entry point to multilingual HVAC, operations, and energy-saving guidance—without turning the product into a database console.
 
 ![Knowledge Base page](docs/images/knowledge-base.png)
+
+### Drawing Intelligence
+
+BuildingAI can also ingest architectural / HVAC drawings through an optional YOLO-based vision adapter. Detected objects remain AI predictions until reviewed, and confirmed drawing objects can be linked to project equipment for downstream read-only Agent queries.
+
+![Synthetic demonstration drawing in Drawing Intelligence](docs/images/drawing-intelligence.png)
+
+*Synthetic demonstration drawing. The current legacy YOLOv8 model supports `aircon`, `baseline_mark`, and `window`; model weights are not distributed with this repository. Equipment-to-drawing association is human-confirmed, not automatic.*
+
+For example, when asked “Where is AHP-3-3 on the drawing?”, the Agent reads a confirmed drawing mapping and returns the drawing, page, and object information. Without one, it abstains: `No reliable drawing association has been confirmed for this equipment.`
 
 ## Key features
 

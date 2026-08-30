@@ -23,6 +23,24 @@ UI pages render state and initiate services. They do not classify points, assemb
 prompts, or calculate COP. Services coordinate reusable domain functions. Core modules
 do not import PyQt. Storage owns persistence.
 
+## Vision boundary
+
+Drawing Intelligence keeps the same directional boundary:
+
+```text
+PyQt Drawing Intelligence page
+  ↓
+DrawingService (project persistence and review workflow)
+  ↓
+BaseDrawingDetector
+  ↓
+YOLODrawingDetector (optional local Ultralytics adapter)
+```
+
+The model is local and optional. A detector output is project evidence with a
+`predicted` status, not an engineering fact; human review is required before manual
+equipment association. Agent drawing tools are read-only.
+
 ## LLM boundary
 
 Product services use `LLMManager.get_provider()` and the `BaseLLMProvider` contract,

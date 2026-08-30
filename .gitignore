@@ -42,6 +42,7 @@ dist/
 *.sqlite-wal
 models/
 *.pt
+*.onnx
 .ollama/
 ollama_models/
 knowledge/private/
