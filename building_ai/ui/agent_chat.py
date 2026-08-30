@@ -18,7 +18,14 @@ class ChatInput(QTextEdit):
     submitted = pyqtSignal()
 
     def keyPressEvent(self, event):  # noqa: N802 - Qt API name
-        if event.key() in (Qt.Key_Return, Qt.Key_Enter) and not event.modifiers() & Qt.ShiftModifier:
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            if event.modifiers() & Qt.ShiftModifier:
+                # QTextEdit's platform handling of Shift+Enter differs under
+                # headless Qt backends. Insert explicitly so the interaction
+                # remains a predictable multiline input everywhere.
+                self.insertPlainText("\n")
+                event.accept()
+                return
             event.accept()
             self.submitted.emit()
             return
