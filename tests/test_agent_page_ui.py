@@ -155,10 +155,14 @@ def test_knowledge_page_uses_real_catalog_summary_search_filters_and_i18n(qapp, 
     KnowledgeService(configured_context.database).ingest_catalog(source_registry(), load_materialized_facts())
     LanguageManager.instance().set_language("en_US")
     page = KnowledgeBasePage(configured_context); page.show()
-    assert page.cards["knowledge_sources"].value.text() == "19"
+    assert page.cards["knowledge_trusted_sources"].value.text() == "19"
     assert page.cards["knowledge_chunks"].value.text() == "154"
     assert page.status.text() == "Knowledge Ready"
     assert page.source_table.rowCount() == 19
+    page._toggle_source_browser()
+    assert page.source_browser.isVisible()
+    page.source_table.selectRow(0)
+    assert "URL:" in page.source_details.toPlainText()
 
     page.query.setText("冷冻水温差低")
     page.search()
@@ -171,9 +175,34 @@ def test_knowledge_page_uses_real_catalog_summary_search_filters_and_i18n(qapp, 
     assert any(item["metadata"]["country"] == "Japan" for item in page._filtered_results())
 
     LanguageManager.instance().set_language("zh_CN")
-    assert page.heading.text() == "知识库"
+    assert page.search_heading.text() == "搜索专业知识"
     assert page.search_button.text() == "搜索知识"
     LanguageManager.instance().set_language("en_US")
+    page.close()
+
+
+def test_knowledge_navigation_uses_its_own_subtitle_without_duplicate_page_heading(qapp, configured_context):
+    LanguageManager.instance().set_language("en_US")
+    window = MainWindow(configured_context)
+    index = next(i for i, (_, key, _) in enumerate(window.NAVIGATION) if key == "knowledge_base")
+    window.change_page(index)
+    page = window.pages[index]
+    assert window.page_title.text() == "Knowledge Base"
+    assert "HVAC operation" in window.page_subtitle.text()
+    assert not hasattr(page, "heading")
+    window.close()
+
+
+@pytest.mark.parametrize("width,height,columns", [(860, 720, 2), (1048, 720, 4), (1208, 900, 4), (1688, 1080, 4)])
+def test_knowledge_page_metrics_reflow_without_text_clipping(qapp, configured_context, width, height, columns):
+    KnowledgeService(configured_context.database).ingest_catalog(source_registry(), load_materialized_facts())
+    page = KnowledgeBasePage(configured_context); page.resize(width, height); page.show(); QTest.qWait(30)
+    assert page.query.isVisible() and page.query.width() > page.search_button.width() * 3
+    for card in page.cards.values():
+        assert card.value.height() >= card.value.fontMetrics().height()
+        assert card.title.height() >= card.title.fontMetrics().height()
+        assert card.height() >= card.minimumHeight()
+    assert page.metric_grid.columnCount() == columns
     page.close()
 
 

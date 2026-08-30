@@ -105,6 +105,8 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(index)
         self.navigation_buttons[index].setChecked(True)
         self.page_title.setText(tr(self.NAVIGATION[index][1]))
+        subtitle_key = "page_subtitle_" + self.NAVIGATION[index][1]
+        self.page_subtitle.setText(tr(subtitle_key) if subtitle_key in {"page_subtitle_dashboard", "page_subtitle_energy_analysis", "page_subtitle_analysis", "page_subtitle_knowledge_base"} else "")
         page = self.pages[index]
         if hasattr(page, "refresh"):
             page.refresh()
@@ -141,7 +143,7 @@ class MainWindow(QMainWindow):
             button.setText(tr(button.property('translation_key')))
         index = self.stack.currentIndex() if hasattr(self, "stack") else 0
         self.page_title.setText(tr(self.NAVIGATION[index][1]))
-        self.page_subtitle.setText(tr("page_subtitle_" + self.NAVIGATION[index][1]) if "page_subtitle_" + self.NAVIGATION[index][1] in {"page_subtitle_dashboard", "page_subtitle_energy_analysis", "page_subtitle_analysis"} else "")
+        self.page_subtitle.setText(tr("page_subtitle_" + self.NAVIGATION[index][1]) if "page_subtitle_" + self.NAVIGATION[index][1] in {"page_subtitle_dashboard", "page_subtitle_energy_analysis", "page_subtitle_analysis", "page_subtitle_knowledge_base"} else "")
         for page in getattr(self, "pages", []):
             if hasattr(page, "retranslate_ui"):
                 page.retranslate_ui()
