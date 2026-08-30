@@ -1,5 +1,7 @@
 from building_ai.knowledge import KnowledgeService
-from building_ai.knowledge_catalog import curated_facts, source_registry
+import json
+
+from building_ai.knowledge_catalog import curated_facts, materialize_catalog, source_registry
 from building_ai.storage import Database
 
 
@@ -33,3 +35,17 @@ def test_structured_semantic_sources_are_retrievable(tmp_path):
     results = knowledge.search("What relationship should a Brick equipment have with a sensor?", top_k=3)
     assert results
     assert any(item["metadata"]["source_id"] == "us_brick" for item in results)
+
+
+def test_catalog_materializes_curated_chunks_metadata_and_keyword_index(tmp_path):
+    root = tmp_path / "knowledge"
+    manifest = materialize_catalog(root)
+    chunks = root / "chunks" / "knowledge_chunks.jsonl"
+    assert manifest["chunk_count"] >= 150
+    assert chunks.exists() and len(chunks.read_text(encoding="utf-8").splitlines()) == manifest["chunk_count"]
+    assert (root / "curated" / "china" / "knowledge.jsonl").exists()
+    assert (root / "curated" / "us" / "knowledge.jsonl").exists()
+    assert (root / "curated" / "japan" / "knowledge.jsonl").exists()
+    assert (root / "metadata" / "concept_aliases.json").exists()
+    index = json.loads((root / "index" / "keyword_cjk_index.json").read_text(encoding="utf-8"))
+    assert "chilled_water_pump" in index

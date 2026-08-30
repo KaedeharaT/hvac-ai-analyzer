@@ -14,7 +14,12 @@ if str(ROOT) not in sys.path:
 
 from building_ai.config import Settings
 from building_ai.knowledge import KnowledgeService
-from building_ai.knowledge_catalog import curated_facts, source_registry
+from building_ai.knowledge_catalog import (
+    CATALOG_DIR,
+    load_materialized_facts,
+    materialize_catalog,
+    source_registry,
+)
 from building_ai.storage import Database
 
 CASES = [
@@ -46,7 +51,12 @@ def main() -> int:
     parser.add_argument("--artifacts", type=Path, default=ROOT / "artifacts" / "knowledge")
     arguments = parser.parse_args()
     database = Database(arguments.database or Settings.load().database_path); database.initialize()
-    knowledge = KnowledgeService(database); stats = knowledge.ingest_catalog(source_registry(), curated_facts())
+    # Evaluate the versioned, on-disk corpus that the build command produces,
+    # rather than an in-memory fixture.  Materialisation is deterministic and
+    # makes the evaluation self-contained for a clean checkout.
+    materialize_catalog(CATALOG_DIR)
+    knowledge = KnowledgeService(database)
+    stats = knowledge.ingest_catalog(source_registry(), load_materialized_facts(CATALOG_DIR))
     results = []
     for case_id, language, query, expected_source in CASES:
         retrieved = knowledge.search(query, top_k=3)
