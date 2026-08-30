@@ -33,6 +33,10 @@ class KnowledgeService:
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS knowledge_sources (source_id TEXT PRIMARY KEY,payload_json TEXT NOT NULL)"
             )
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS knowledge_term_index (term TEXT NOT NULL,chunk_id TEXT NOT NULL,PRIMARY KEY(term,chunk_id))"
+            )
+            connection.execute("CREATE INDEX IF NOT EXISTS idx_knowledge_term_index_chunk ON knowledge_term_index(chunk_id)")
 
     def ingest(self, title, source, text, section="General", metadata=None, chunk_size=800):
         """Ingest a caller-supplied source while retaining provenance per chunk."""
@@ -54,6 +58,10 @@ class KnowledgeService:
             for index, chunk in enumerate(chunks, 1):
                 chunk_id = str(uuid.uuid4())
                 connection.execute("INSERT INTO knowledge_chunks VALUES (?,?,?,?,?,?)", (chunk_id, title, source, f"{section} ({index}/{len(chunks)})", chunk, payload))
+                connection.executemany(
+                    "INSERT OR IGNORE INTO knowledge_term_index VALUES (?,?)",
+                    ((term, chunk_id) for term in _search_terms(f"{title} {section} {chunk}")),
+                )
                 identifiers.append(chunk_id)
         return identifiers
 
@@ -64,6 +72,7 @@ class KnowledgeService:
             # Catalog facts are replaceable release data.  Leave any
             # user-supplied chunks intact while removing obsolete catalog IDs.
             connection.execute("DELETE FROM knowledge_chunks WHERE chunk_id LIKE 'catalog:%'")
+            connection.execute("DELETE FROM knowledge_term_index WHERE chunk_id LIKE 'catalog:%'")
             for source in registry:
                 connection.execute(
                     "INSERT OR REPLACE INTO knowledge_sources VALUES (?,?)",
@@ -83,6 +92,12 @@ class KnowledgeService:
                     "INSERT OR REPLACE INTO knowledge_chunks VALUES (?,?,?,?,?,?)",
                     (f"catalog:{fact['record_id']}", fact["title"], source["official_url"], fact["section"], fact["text"],
                      json.dumps(metadata, ensure_ascii=False, sort_keys=True)),
+                )
+                chunk_id = f"catalog:{fact['record_id']}"
+                terms = _search_terms(" ".join((fact["title"], fact["section"], fact["text"], " ".join(fact["concepts"]))))
+                connection.executemany(
+                    "INSERT OR IGNORE INTO knowledge_term_index VALUES (?,?)",
+                    ((term, chunk_id) for term in terms),
                 )
         return self.stats()
 
@@ -113,7 +128,17 @@ class KnowledgeService:
         query_terms = _search_terms(query)
         query_concepts = self._query_concepts(query)
         with self.database.connect() as connection:
+            candidates: set[str] = set()
+            if query_terms:
+                placeholders = ",".join("?" for _ in query_terms)
+                candidates = {row["chunk_id"] for row in connection.execute(
+                    f"SELECT DISTINCT chunk_id FROM knowledge_term_index WHERE term IN ({placeholders})", tuple(query_terms)
+                ).fetchall()}
+            # A normalized concept can match a foreign-language chunk even
+            # where it has no lexical overlap with the query.
             rows = connection.execute("SELECT * FROM knowledge_chunks").fetchall()
+            if candidates:
+                rows = [row for row in rows if row["chunk_id"] in candidates or set(json.loads(row["metadata"]).get("concepts", [])) & query_concepts]
         scored = []
         for row in rows:
             metadata = json.loads(row["metadata"])
@@ -124,7 +149,14 @@ class KnowledgeService:
             document_terms = _search_terms(" ".join((row["title"], row["section"], row["text"], " ".join(metadata.get("concepts", [])))))
             lexical = len(query_terms & document_terms)
             concept_overlap = len(query_concepts & set(metadata.get("concepts", [])))
-            score = lexical + concept_overlap * 12
+            # A normalized concept bridges languages, but direct terms from
+            # the question should still outrank a merely related topic.
+            score = lexical + concept_overlap * 8
+            # When two compact summaries have identical lexical/concept
+            # evidence, present a public source ahead of an internal synthesis
+            # so end-user citations lead back to the attributable guidance.
+            if score and metadata.get("country") not in {None, "Global"}:
+                score += 0.25
             if score <= 0:
                 continue
             scored.append({
@@ -138,6 +170,7 @@ class KnowledgeService:
         with self.database.connect() as connection:
             source_rows = connection.execute("SELECT payload_json FROM knowledge_sources").fetchall()
             chunk_rows = connection.execute("SELECT metadata FROM knowledge_chunks").fetchall()
+            term_count = int(connection.execute("SELECT COUNT(*) FROM knowledge_term_index").fetchone()[0])
         sources = [json.loads(row["payload_json"]) for row in source_rows]
         chunks = [json.loads(row["metadata"]) for row in chunk_rows]
         return {
@@ -146,4 +179,5 @@ class KnowledgeService:
             "chunks_by_country": dict(Counter(chunk.get("country", "Unknown") for chunk in chunks)),
             "chunks_by_language": dict(Counter(chunk.get("language", "Unknown") for chunk in chunks)),
             "chunks_by_category": dict(Counter(chunk.get("knowledge_category", "Unknown") for chunk in chunks)),
+            "persistent_index_terms": term_count,
         }

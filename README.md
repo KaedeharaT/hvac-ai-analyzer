@@ -139,6 +139,12 @@ python scripts/build_knowledge_base.py
 python scripts/run_knowledge_rag_evaluation.py
 ```
 
+The rebuild creates versioned content at `knowledge/curated/`, portable
+records at `knowledge/chunks/knowledge_chunks.jsonl`, controlled multilingual
+aliases in `knowledge/metadata/`, and a keyword/CJK index in
+`knowledge/index/`. It also refreshes the persistent SQLite retrieval store
+configured by `BUILDINGAI_DATABASE_PATH` (or the local default).
+
 See [knowledge sources and licensing](docs/knowledge_sources.md) for the source
 registry, use restrictions, and rebuild behavior. The RAG evaluation measures
 Top-1/Top-k retrieval for Chinese, English, and Japanese queries; it is an

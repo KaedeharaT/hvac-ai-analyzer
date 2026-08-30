@@ -1,0 +1,32 @@
+{
+  "chunk_count": 154,
+  "chunks_by_category": {
+    "control": 6,
+    "energy_analysis": 8,
+    "energy_saving": 28,
+    "engineering_principles": 18,
+    "equipment": 6,
+    "operation": 8,
+    "operation_maintenance": 18,
+    "retrofit": 16,
+    "semantic": 34,
+    "system_topology": 4,
+    "zeb": 8
+  },
+  "chunks_by_country": {
+    "China": 30,
+    "Global": 26,
+    "Japan": 32,
+    "US": 66
+  },
+  "chunks_by_language": {
+    "Chinese": 30,
+    "English": 66,
+    "Japanese": 32,
+    "Multilingual": 26
+  },
+  "content_policy": "Original factual summaries, structured ontology facts, and source metadata only.",
+  "index_term_count": 4337,
+  "schema_version": 1,
+  "source_count": 19
+}

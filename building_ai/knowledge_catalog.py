@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 import json
+import re
+from collections import Counter, defaultdict
 
 CATALOG_DIR = Path(__file__).resolve().parents[1] / "knowledge"
 
@@ -57,6 +59,15 @@ def curated_facts() -> list[dict]:
         ("Connection media", "Record the conveyed medium on a connection point so chilled-water, air, and electrical relationships are not conflated."),
         ("Topology and direction", "A directed connection describes flow topology; it should be supported by the system model rather than inferred from an isolated point name."),
     ])
+    facts += _cards("us_brick", "US", "English", "equipment", "structured_hvac_equipment",
+        ["brick", "equipment", "sensor", "ahu", "fan", "pump", "chiller", "meter"], [
+        ("Brick AHU representation", "Represent an air-handling unit as equipment and relate its fan, coil, dampers, sensors, commands, and setpoints with explicit Brick relationships."),
+        ("Brick pump representation", "Represent a pump as equipment and connect measured power, speed, differential pressure, and command points to the pump rather than to an unrelated system."),
+        ("Brick chiller representation", "Represent a chiller as equipment and associate leaving-water temperature, entering-water temperature, power, status, and control points with the chiller context."),
+        ("Brick sensor semantics", "A sensor class names what a point measures; combine it with point ownership and location to avoid treating the same temperature point as interchangeable across assets."),
+        ("Brick setpoint semantics", "A setpoint is a control value, not evidence that the measured process reached it; retain both setpoint and sensor relationships in the model."),
+        ("Brick equipment discovery", "Explicit equipment, point, part, feed, and control relationships make equipment discovery more reliable than grouping raw point names by text alone."),
+    ])
     facts += _cards("us_energyplus", "US", "English", "engineering_principles", "chiller",
         ["chiller", "cop", "part_load", "chilled_water_supply_temperature", "flow", "load"], [
         ("Chiller reference conditions", "Chiller capacity and energy models use reference temperatures and flows; compare observed performance against an appropriate operating context."),
@@ -93,6 +104,13 @@ def curated_facts() -> list[dict]:
         ("Free cooling", "Waterside economizer or free-cooling strategies are retrofit candidates where climate, loads, equipment, and water-side design make them feasible."),
         ("Pump high-frequency check", "Long periods of high pump speed justify checking differential-pressure setpoints, valve authority, bypass flow, and actual load before resizing equipment."),
         ("Retrofit economics", "Capital cooling-system changes require site-specific feasibility, operating hours, baseline energy, cost, and maintenance analysis."),
+    ])
+    facts += _cards("us_doe_better_buildings", "US", "English", "energy_saving", "hvac_measure",
+        ["fan", "pump", "heat_recovery", "measurement", "retrofit", "energy_saving"], [
+        ("Fan control candidate", "Variable-speed control for fans is a candidate measure when air volume can follow real demand and ventilation requirements remain satisfied."),
+        ("Heat-recovery candidate", "Heat-recovery opportunities require review of climate, exhaust and outdoor-air flows, contamination risk, pressure drop, and maintenance access."),
+        ("Metering for measures", "Metering and trend data establish a baseline for an energy measure and help distinguish a persistent saving from a weather or operating change."),
+        ("Replacement screening", "Equipment replacement candidates should be screened with remaining life, load profile, maintenance condition, utility cost, installation constraints, and verification planning."),
     ])
     facts += _cards("us_doe_retuning", "US", "English", "operation", "building_controls",
         ["operation", "control", "energy_saving", "measurement", "night_power"], [
@@ -136,6 +154,17 @@ def curated_facts() -> list[dict]:
         ("集成运维", "BIM、设施管理与能耗信息可在合法、适当的数据治理下支持运维协同，但不改变现场安全责任。"),
         ("智能管控边界", "智能控制建议应由现场授权人员审查；BuildingAI 仅提供只读分析与建议依据。"),
     ])
+    facts += _cards("cn_mohurd_ndrc_building", "China", "Chinese", "retrofit", "existing_public_building",
+        ["retrofit", "energy_saving", "chiller", "pump", "fan", "measurement", "economic_evaluation"], [
+        ("既有公共建筑改造", "既有公共建筑节能改造应结合围护结构、冷热源、输配系统、末端设备和运行管理进行系统化筛选。"),
+        ("冷热源更新", "冷水机组、热泵等冷热源更新前应核查实际负荷、运行效率、维修状态和与输配系统的匹配。"),
+        ("泵与风机优化", "水泵和风机优化应以实际流量、压差、阀门工况、运行时间和舒适性约束为依据。"),
+        ("能源审计边界", "能源审计用于发现节能潜力和验证改造效果；不完整计量数据应作为不确定性而不是精确节能量。"),
+        ("改造经济性", "设备改造候选应同时评估投资、运行费用、维护、寿命、施工影响和可测量的节能指标。"),
+        ("建筑运行评估", "运行评估应覆盖季节、使用时段和主要系统负荷，避免只根据短时功率判断改造优先级。"),
+        ("高效制冷行动", "高效制冷和智能管控可作为改造方向，但现场设计、调试和运行验证仍不可省略。"),
+        ("改造后验证", "改造完成后应采用可比较的计量周期和运行条件考核节能指标并记录偏差原因。"),
+    ])
     facts += _cards("jp_meti_zeb", "Japan", "Japanese", "zeb", "commercial_building",
         ["zeb", "energy_saving", "retrofit", "hvac", "bems"], [
         ("ZEB の基本", "ZEB は日射遮蔽、自然エネルギー利用、高断熱、高効率設備と創エネを組み合わせ、年間エネルギー消費の大幅削減を目指す建築物の考え方です。"),
@@ -169,6 +198,17 @@ def curated_facts() -> list[dict]:
         ("検証計画", "改修後は、事前に決めたベースラインと計測方法で効果を確認します。"),
         ("段階的改善", "大規模改修の前でも、計測、制御、保全の改善で実行可能な低コスト対策を選別できます。"),
     ])
+    facts += _cards("jp_bri_becc", "Japan", "Japanese", "energy_analysis", "non_residential_building",
+        ["bems", "measurement", "energy_analysis", "chiller", "pump", "fan", "zeb"], [
+        ("非住宅建築物の評価", "非住宅建築物の省エネルギー性能は、用途、外皮、空調、換気、照明、給湯などの条件を区別して評価します。"),
+        ("一次エネルギーの整理", "エネルギー性能の比較では、電力だけでなく一次エネルギーの評価境界と設備用途を明確にします。"),
+        ("BEMS データの利用", "BEMS の計測・蓄積データは、設備別・用途別の運転傾向を確認する基盤であり、データ品質も合わせて確認します。"),
+        ("空調設備の入力条件", "空調の評価では、熱源方式、搬送、制御、設定値、運転時間および建物用途の条件が結果に影響します。"),
+        ("ポンプ搬送の確認", "ポンプの省エネ評価では、流量、揚程、制御方式、運転時間と系統の抵抗変化を確認します。"),
+        ("ファン搬送の確認", "ファンの運転改善では、必要外気量、空気量、圧力、フィルタ状態、制御方式と室内環境を同時に確認します。"),
+        ("計測の比較可能性", "変更前後を比較する時は、気象、利用状況、運転時間、負荷条件の差を記録して解釈します。"),
+        ("モデルと実測", "設計時のエネルギー計算結果は実運用の代替ではないため、実測による運転確認と継続的な改善が必要です。"),
+    ])
     synthesis = _cards("buildingai_engineering_synthesis", "Global", "Multilingual", "engineering_principles", "chilled_water_system",
         ["low_delta_t", "chilled_water_pump", "bypass_valve", "sensor_quality", "flow", "maintenance"], [
         ("Low delta-T: confirm the measurement", "Before changing plant controls, compare supply and return temperature sensors, timestamps, units, and plausible readings; a sensor error can mimic low delta-T."),
@@ -191,7 +231,10 @@ def curated_facts() -> list[dict]:
     concept_rows = [
         ("chilled_water_supply_temperature", "Normalized concept: chilled-water supply temperature. Aliases: 冷冻水供水温度, 冷水供給温度, 冷水温度, chilled water supply temperature."),
         ("chilled_water_return_temperature", "Normalized concept: chilled-water return temperature. Aliases: 冷冻水回水温度, 冷水還り温度, chilled water return temperature."),
-        ("low_delta_t", "Normalized concept: low chilled-water delta-T. Aliases: 冷冻水温差低, 冷水温度差が小さい, low delta T."),
+        # Controlled natural-language variants are concept metadata, not
+        # per-question routing rules.  They keep equivalent CJK and English
+        # phrasings discoverable through the same normalized concept.
+        ("low_delta_t", "Normalized concept: low chilled-water delta-T. Aliases: 冷冻水温差低, 温差偏低, 冷水温度差が小さい, 冷水温度差が低い, low delta T, chilled-water delta-T, chilled water delta-T."),
         ("chilled_water_pump", "Normalized concept: chilled-water pump. Aliases: 冷冻水泵, 冷水ポンプ, chilled water pump."),
         ("chiller", "Normalized concept: chiller. Aliases: 冷水机组, 冷凍機, チラー, chiller."),
         ("heat_pump", "Normalized concept: heat pump. Aliases: 热泵, ヒートポンプ, heat pump."),
@@ -213,4 +256,82 @@ def curated_facts() -> list[dict]:
     for fact in structured:
         fact["concepts"] = [fact["title"]]
     facts += structured
+    # EnergyPlus's flow-context guidance is also a public, attributable
+    # explanation source for a low-ΔT investigation.
+    for fact in facts:
+        if fact["source_id"] == "us_energyplus" and fact["title"] == "Flow context":
+            fact["concepts"] = [*fact["concepts"], "low_delta_t", "bypass_valve"]
     return facts
+
+
+def _terms(text: str) -> set[str]:
+    normalized = text.casefold()
+    values = set(re.findall(r"[\w-]+", normalized))
+    for span in re.findall(r"[\u4e00-\u9fffぁ-んァ-ンー]+", normalized):
+        values.add(span)
+        values.update(span[index:index + 2] for index in range(max(0, len(span) - 1)))
+        values.update(span[index:index + 3] for index in range(max(0, len(span) - 2)))
+    return {value for value in values if len(value) > 1}
+
+
+def materialize_catalog(destination: Path = CATALOG_DIR) -> dict:
+    """Write deterministic, Git-safe curated content, chunks, metadata and index.
+
+    The files contain original summaries and structured ontology facts only; no
+    downloaded HTML, raw manuals, user data, or copyright-unclear full text.
+    """
+    registry = source_registry()
+    sources = {item["source_id"]: item for item in registry}
+    entries = []
+    for fact in curated_facts():
+        source = sources[fact["source_id"]]
+        entries.append({
+            "chunk_id": f"catalog:{fact['record_id']}", "source_id": fact["source_id"], "country": fact["country"],
+            "language": fact["language"], "organization": source["organization"], "title": fact["title"],
+            "section": fact["section"], "category": fact["knowledge_category"], "equipment_type": fact["equipment_type"],
+            "concepts": fact["concepts"], "content": fact["text"], "source_url": source["official_url"],
+            "license_note": source["license_or_usage_note"], "content_strategy": source["content_strategy"],
+            "citation": f"{source['organization']} — {source['title']} — {fact['section']}",
+        })
+    entries.sort(key=lambda item: item["chunk_id"])
+
+    def write_jsonl(path: Path, values: list[dict]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("".join(json.dumps(item, ensure_ascii=False, sort_keys=True) + "\n" for item in values), encoding="utf-8")
+
+    write_jsonl(destination / "chunks" / "knowledge_chunks.jsonl", entries)
+    names = {"China": "china", "US": "us", "Japan": "japan", "Global": "global"}
+    for country, folder in names.items():
+        write_jsonl(destination / "curated" / folder / "knowledge.jsonl", [item for item in entries if item["country"] == country])
+
+    concept_rows = [item for item in entries if item["equipment_type"] == "concept_dictionary"]
+    metadata_dir = destination / "metadata"; metadata_dir.mkdir(parents=True, exist_ok=True)
+    metadata_dir.joinpath("concept_aliases.json").write_text(json.dumps(concept_rows, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    inverted: dict[str, list[str]] = defaultdict(list)
+    for entry in entries:
+        for term in _terms(" ".join((entry["title"], entry["section"], entry["content"], " ".join(entry["concepts"])))):
+            inverted[term].append(entry["chunk_id"])
+    index_dir = destination / "index"; index_dir.mkdir(parents=True, exist_ok=True)
+    index_dir.joinpath("keyword_cjk_index.json").write_text(
+        json.dumps({term: sorted(ids) for term, ids in sorted(inverted.items())}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    manifest = {
+        "schema_version": 1, "source_count": len(registry), "chunk_count": len(entries), "index_term_count": len(inverted),
+        "chunks_by_country": dict(Counter(item["country"] for item in entries)),
+        "chunks_by_language": dict(Counter(item["language"] for item in entries)),
+        "chunks_by_category": dict(Counter(item["category"] for item in entries)),
+        "content_policy": "Original factual summaries, structured ontology facts, and source metadata only.",
+    }
+    metadata_dir.joinpath("catalog_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return manifest
+
+
+def load_materialized_facts(destination: Path = CATALOG_DIR) -> list[dict]:
+    """Load the versioned JSONL content used by the runtime database builder."""
+    path = destination / "chunks" / "knowledge_chunks.jsonl"
+    return [
+        {"record_id": item["chunk_id"].removeprefix("catalog:"), "source_id": item["source_id"], "country": item["country"],
+         "language": item["language"], "knowledge_category": item["category"], "equipment_type": item["equipment_type"],
+         "concepts": item["concepts"], "title": item["title"], "section": item["section"], "text": item["content"]}
+        for item in (json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+    ]
