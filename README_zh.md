@@ -1,135 +1,227 @@
 # BuildingAI
 
-> **面向建筑能源的 Agentic AI 智能分析平台**
+### 面向建筑能源分析的 Agentic AI 智能平台
 
-将异构 BEMS 数据转化为易理解的能源洞察、设备诊断与可执行建议。
+将异构 BEMS / HVAC 运行数据自动转化为：**设备识别、能源分析、运行诊断、节能建议和 AI 问答**。
 
-**[English README](README.md)** · [架构说明](docs/architecture.md) · [知识来源](docs/knowledge_sources.md)
+BuildingAI 面向真实建筑运行数据，结合工程规则、LLM、工具调用与知识检索，实现从陌生 BEMS 数据理解到设备级能源诊断和节能建议生成的完整智能分析流程。
 
-## 这是什么
-
-BuildingAI 是一个本地优先的建筑能源智能分析平台。它读取 CSV / Excel 格式的 BEMS 与 HVAC 运行数据，理解陌生点位名，识别设备与运行信号，分析能耗、功率、COP 和供回水温差，并将结果呈现为可核查的诊断和建议。
-
-它不是普通聊天机器人，也不会向 BAS 写入控制命令。系统只读取、分析、解释和建议；现场人员仍负责验证与运行决策。
-
-## 它解决什么问题
-
-真实建筑数据往往来自不同系统，点位名称不统一、语言混杂，工程师需要先花大量时间理解数据，才能开始分析。BuildingAI 将这一步工程化：先完成点位语义理解和设备组织，再基于真实项目数据分析问题，并在需要时使用带来源的专业知识解释原因和建议检查方向。
+**简体中文 | [English](README.md)** · [架构说明](docs/architecture.md) · [知识来源](docs/knowledge_sources.md)
 
 ![BuildingAI 总览](docs/images/dashboard.png)
 
-*Project 7 的本地总览：已测能耗、需量、COP、设备状态和已审查的运行发现。*
+*Project 7 总览：系统将测量数据、设备状态和运行发现整理为可理解的分析结果。*
 
-## 主要能力
+## 这个项目解决什么问题
 
-| 能力 | 面向用户的价值 |
-| --- | --- |
-| **自动理解 BEMS 数据** | 支持中文、英文、日文点位名，映射到标准 HVAC 语义，并保留物理一致性与人工复核边界。 |
-| **能源与设备分析** | 在数据可用时计算能耗、功率、温度、COP、ΔT 与设备性能。 |
-| **证据驱动的诊断** | 用确定性工程逻辑建立项目事实，用受约束的 Agent 推理组织分析，避免以通用知识替代现场证据。 |
-| **可执行建议** | 将工程发现转化为工程师和非专业用户都能理解的运维、节能和下一步检查建议。 |
-| **AI 助手** | 支持多步骤分析、只读工具调用、项目记忆、知识检索、反思补查、引用与 Trace。 |
-| **可插拔 LLM** | 支持 Ollama Local Qwen 和 OpenAI-compatible Provider；不配置 LLM 时核心分析仍可使用。 |
+传统建筑能源分析的第一步，往往不是计算，而是人工整理数据。一个项目可能有数百个 BEMS 点位，且常见问题包括：
 
-## 从原始数据到行动建议
+- 点位命名不统一，同一含义可能有多种写法；
+- 中文、英文、日文混杂，难以直接复用分析规则；
+- 不清楚温度、功率、流量等点位属于哪台设备；
+- 设备关系和物理量关系需要工程师逐一判断；
+- 在这些前置工作完成前，能耗、COP、ΔT 和异常分析无法可靠开始。
+
+BuildingAI 的目标，是让系统自动完成一条可审查的分析路径：
 
 ```mermaid
 flowchart LR
-    A[BEMS CSV / Excel] --> B[点位语义理解]
+    A[原始 BEMS 数据] --> B[语义理解]
     B --> C[设备识别]
-    C --> D[能源与 KPI 分析]
-    D --> E[诊断]
-    E --> F[建议]
+    C --> D[KPI 与能源分析]
+    D --> E[运行诊断]
+    E --> F[节能建议]
     F --> G[AI Assistant]
 ```
 
-## 产品界面
+它不是单纯的聊天机器人。项目数据决定当前建筑**发生了什么**；AI 的作用是组织分析、补充证据、解释结果，并把工程判断转化为用户可以执行的下一步。
 
-### 能源分析
+## 核心能力
 
-展示可用的能耗、需量、温度趋势、COP、ΔT 与设备级表现，而不是要求用户直接阅读原始导出表。
+### 自动理解 BEMS 数据
+
+自动识别不同项目中不统一的点位名称、单位和设备关系，并映射为标准 HVAC 语义。对不可靠或不明确的点位保留人工复核边界，而不是强行猜测。
+
+### 设备与能源分析
+
+基于项目中实际可用的数据计算和展示：
+
+- 能耗、功率和负荷趋势
+- 温度、流量与设备运行状态
+- COP、ΔT 等设备性能指标
+- 设备之间的表现对比
 
 ![能源分析](docs/images/energy-analysis.png)
 
-### 带来源的 AI Assistant
+### 运行诊断
 
-AI Assistant 会展示简洁的分析过程，并明确区分：
+结合工程规则与当前项目证据识别异常运行状态，例如冷冻水利用效率偏低、设备运行表现需要关注等。诊断结论始终保留数据范围和现场验证边界。
 
-- **项目证据**：来自当前 BuildingAI 项目的 BEMS、KPI 与诊断数据。
-- **参考资料**：来自检索到的工程、运维或节能知识。
+### 节能建议
 
-普通用户不会看到内部工具名；工具、检索分数和 Trace 等技术信息仅在按需展开的技术详情中显示。
+将 HVAC 技术诊断转换成普通用户也能理解的检查与改善建议，例如先检查水泵频率、压差控制、旁通阀或末端换热情况，并注明哪些调整需要现场小步验证。
 
-![AI Assistant 参考资料卡片](docs/images/ai-assistant.png)
+### AI 助手
 
-### 可见、可搜索的知识库
+用户可以直接询问：
 
-知识库页面不是 Chunk 管理器，而是面向用户的专业知识入口：可搜索 HVAC、运行维护和节能问题，查看地区覆盖、知识领域和可信来源。
+> “哪个设备表现最差？”
+>
+> “AHP-3-3 为什么需要关注？”
+>
+> “温差偏低应该怎么改善？”
 
-![知识库页面](docs/images/knowledge-base.png)
+系统会查询当前项目数据、检查现有证据，必要时补充分析，并结合建筑运行知识库生成有依据的回答。
 
-## Agent 如何工作
+![AI Assistant 中的真实参考资料卡片](docs/images/ai-assistant.png)
 
-例如用户问：**“哪台设备表现最差？”**，系统会：
+## Agent 如何完成一次分析
 
-1. 识别这是设备分析任务；
-2. 查询所选项目中的设备 KPI；
-3. 检查现有诊断结果；
-4. 判断证据是否足以解释问题；
-5. 必要时补查诊断或时序证据；
-6. 仅在有帮助时检索专业知识；
-7. 输出有边界的结论，并将项目事实与知识来源分开呈现。
+对于复杂问题，BuildingAI 使用受边界约束的 Agent 工作流：
 
-运行时包括结构化路由、受限计划、只读工具权限、证据检查、反思 / 重规划、会话与项目记忆、RAG 以及持久化 Trace。系统没有 BACnet、Modbus 或 OPC 写路径。
+```mermaid
+flowchart TD
+    Q[用户问题] --> U[理解任务]
+    U --> P[制定分析步骤]
+    P --> T[调用项目数据工具]
+    T --> E{证据是否充分?}
+    E -- 否 --> R[补充查询与重新规划]
+    R --> T
+    E -- 是 --> K[按需检索建筑专业知识]
+    K --> A[生成有证据支持的回答]
+```
 
-## 真实知识库
+对应的工程能力包括：
 
-BuildingAI 内置一个紧凑、可追溯的建筑能源知识目录：
+- 多步任务规划与只读 Tool Calling
+- 基于项目数据的 Evidence Checking
+- 信息不足时的 Reflection / Re-plan
+- 会话与项目上下文记忆
+- RAG 知识检索与来源引用
+- Agent、工具、LLM 和证据 Trace
 
-- **19 个可信来源、154 个精选知识片段**
-- 覆盖 **中国、美国、日本**，保留 **中文 / English / 日本語** 原语言
-- 用统一概念连接 `冷冻水泵`、`chilled water pump` 和 `冷水ポンプ`
-- 覆盖语义、设备/系统关系、工程原理、运行维护、控制、节能、改造与 ZEB
+这些能力的目的不是堆叠术语，而是让回答能追溯、能解释，并避免将通用知识误当作现场事实。
 
-来源包括 Project Haystack、Brick Schema、公开 Brick / ASHRAE 223 连接资料、DOE FEMP、NREL / EnergyPlus、DOE Better Buildings，以及中国和日本政府公开资料。知识库只保存简短、带来源的事实性摘要和结构化本体事实，不复制付费标准、厂商手册或用户文档。
+## 一个真实案例：AHP-3-3 温差偏低
 
-**关键边界：** 项目数据决定当前建筑实际发生了什么；RAG 只负责解释概念、提供原因候选和推荐下一步检查，不能自行生成项目 Finding。
+用户问题：
 
-完整来源、许可和重建说明见 [docs/knowledge_sources.md](docs/knowledge_sources.md)。
+> “AHP-3-3 温差偏低应该怎么改善？”
 
-## 评测与可靠性
+系统先读取当前项目的 KPI 和诊断结果。Project 7 中，AHP-3-3 的已记录项目证据为：
 
-BuildingAI 使用两层 **内部评测体系**，不是公开 benchmark：
+| 项目证据 | 结果 |
+| --- | --- |
+| 平均 COP | 3.94 |
+| 平均 ΔT | 5.75°C |
+| 低 ΔT 样本 | 156 / 773 个有效样本 |
 
-| 评测层 | 作用 | 已记录的运行 |
-| --- | --- | --- |
-| **确定性 Agent 回归套件** | 快速检查路由、工具选择、证据、弃答、权限、记忆隔离、RAG 和 Prompt Injection 边界；故意不调用 LLM。 | 66 cases；该内部套件的 routing / tool selection / task success 为 100%。 |
-| **Local-Qwen 端到端评测** | 使用真实 Local Qwen，执行完整 Agent 路径：工具、证据检查、反思、需要时的 RAG 与最终答案。 | 52 cases；`qwen2.5:7b`；44 次真实 LLM 调用；平均 LLM 延迟 2.94 秒。 |
+Agent 在发现仅有 KPI 不足以解释原因时，会补充运行与诊断证据，并查询建筑运行知识库。最终建议优先检查：
 
-通过失败 Case 分析，某次四轮内部优化的路由准确率从第一轮的 **58.8%** 提升至第四轮的 **100%**。后续固定 52-case 运行记录为 **98.1% Task Success** 和 **98.1% Tool Selection Accuracy**。这些是内部测量，不应被解读为泛化或行业 benchmark 声明。
+1. 冷冻水泵频率；
+2. 压差控制；
+3. 旁通阀；
+4. 末端换热状况。
+
+任何流量调整都应在现场进行小步验证，并持续观察温差、功率和室内舒适度。
+
+**边界很明确：** Project Data 决定“发生了什么”；Knowledge Base 用于解释“为什么、检查什么、如何改善”。知识库不会自行生成某台设备的项目 Finding。
+
+## 可见、可搜索的建筑知识库
+
+BuildingAI 内置一个小而可追溯的知识库，而不是不加筛选地堆积 PDF：
+
+- **19 个可信知识来源**
+- **154 个精选知识片段**
+- 覆盖 **中国、美国、日本**
+- 保留 **中文 / English / 日本語** 原语言，并通过统一概念关联同义术语
+
+内容涉及建筑能源、HVAC、设备与系统关系、运行维护、节能控制、既有建筑改造、ZEB 和语义模型。
+
+来源包括 DOE / NREL、EnergyPlus、DOE FEMP、Project Haystack、Brick Schema、Open223 公开资料，以及中国和日本政府公开建筑节能资料。项目不宣称“海量知识”；所有内容均以可追溯、可使用和版权边界清晰为优先。
+
+![BuildingAI 知识库页面](docs/images/knowledge-base.png)
+
+## 评测：工程回归 + 真实模型行为
+
+BuildingAI 使用两层内部评测体系，目的分别是保证工程稳定性和观察真实 LLM Agent 行为；它们不是公开 benchmark。
+
+### Agent 回归测试
+
+**66 个测试场景**，用于持续验证：
+
+- 问题路由与工具调用
+- 项目隔离与上下文记忆
+- 证据校验、拒答与防止编造
+- RAG 检索与引用
+- 提示注入和只读权限边界
+
+这套回归测试为确定性工程测试，不需要真实 LLM，因此 LLM 延迟为零是预期行为。
+
+### Local Qwen 端到端评测
+
+**52 个真实 Agent 场景**，模型为 **Qwen2.5-7B**。实际执行链路为：
+
+```text
+用户问题 → Qwen → Agent → Tool Calling → RAG（需要时）→ 最终回答
+```
+
+该运行记录了 44 次真实 Local Qwen 调用，平均 LLM 延迟约 2.94 秒。评测覆盖自然语言改写、多轮记忆、模糊问题、数据不足、未知设备、RAG、提示注入和工具降级。详细指标应被理解为 BuildingAI 自建内部测试的结果，而不是对所有建筑项目的泛化承诺。
 
 ```powershell
+# 确定性 Agent 回归测试
 python scripts/run_agentic_evaluation.py
+
+# Local Qwen 端到端评测
 python scripts/run_e2e_agent_eval.py --quick
 python scripts/run_e2e_agent_eval.py --full
 ```
 
-## 架构
+## 系统架构
 
 ```mermaid
 flowchart TB
-    UI[PyQt Desktop / FastAPI] --> TASK[Task Service / Worker]
-    TASK --> AGENT[Bounded Agent Runtime]
-    TASK --> CORE[语义理解 / 设备识别 / 能源分析 / 诊断]
-    AGENT --> LLM[Local Qwen / OpenAI-compatible]
-    AGENT --> MEMORY[Scoped Memory]
-    AGENT --> RAG[Curated RAG]
-    AGENT --> TRACE[Trace & Evaluation]
-    CORE --> STORE[(SQLite / Parquet)]
-    AGENT --> STORE
+    subgraph 展示层
+        UI[PyQt 桌面端]
+        API[FastAPI]
+    end
+    subgraph 应用层
+        TASK[任务服务 / Worker]
+        AGENT[Agent Runtime]
+    end
+    subgraph 分析核心
+        SEM[语义理解]
+        EQUIP[设备发现]
+        ANALYTICS[能源分析与诊断]
+    end
+    subgraph AI能力
+        LLM[Local Qwen / OpenAI-compatible]
+        MEM[上下文记忆]
+        RAG[知识库]
+        TRACE[Trace 与 Evaluation]
+    end
+    subgraph 数据层
+        DB[(SQLite)]
+        DATA[(Parquet / CSV)]
+    end
+    UI --> TASK
+    API --> TASK
+    TASK --> AGENT
+    TASK --> SEM --> EQUIP --> ANALYTICS
+    AGENT --> LLM
+    AGENT --> MEM
+    AGENT --> RAG
+    AGENT --> TRACE
+    SEM --> DB
+    ANALYTICS --> DATA
+    AGENT --> DB
 ```
 
-UI 只负责展示状态和启动工作流；服务层协调复用的领域逻辑；核心模块不依赖 PyQt。详细边界见 [docs/architecture.md](docs/architecture.md)。
+桌面端负责展示和交互；服务层负责流程编排；分析核心不依赖 PyQt。系统支持 FastAPI、后台任务、持久化项目上下文和 Trace，且没有 BACnet、Modbus 或 OPC 写路径。
+
+## 技术栈
+
+Python · PyQt5 · FastAPI · Pydantic · SQLite · Qwen2.5 · Ollama · RAG · pytest
 
 ## 快速开始
 
@@ -144,40 +236,26 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-无需 LLM 也可使用核心分析。若要启用 Local Qwen，先安装 [Ollama](https://ollama.com/)，拉取模型，再到 **Settings** 选择并测试连接：
+核心数据分析不依赖 LLM。若要启用本地 Qwen，请先安装 [Ollama](https://ollama.com/)，拉取模型后在应用的 **Settings** 中选择并测试连接：
 
 ```powershell
 ollama pull qwen2.5:7b
 ```
 
-### API、知识库与测试
-
 ```powershell
-# API
-python -m pip install -r requirements-server.txt
-python -m uvicorn building_ai.api.app:app --host 127.0.0.1 --port 8000
+# 运行测试
+python -m pytest
 
 # 重建知识库
 python scripts/build_knowledge_base.py
 
-# 测试
-python -m pytest
+# 可选：启动 API
+python -m pip install -r requirements-server.txt
+python -m uvicorn building_ai.api.app:app --host 127.0.0.1 --port 8000
 ```
 
-知识库重建会生成 curated records、跨语言 aliases、chunks、keyword/CJK index 和配置的本地 SQLite 检索存储；不会下载或提交私有项目数据。
+## 项目背景与边界
 
-## 项目结构
+BuildingAI 源于对异构 HVAC / BEMS 运行数据自动语义解释的研究，并将研究方法落实为可运行的桌面应用、Agent 工作流、知识库、评测和可观测性能力。
 
-```text
-building_ai/   Desktop UI、服务、核心分析、Agent、存储与 API
-knowledge/     来源目录、精选知识、chunks、aliases 与 index
-tests/         单元、集成、UI、安全与评测支持测试
-scripts/       知识库构建、评测、验收与截图脚本
-docs/          架构、来源政策与说明文档
-```
-
-## 研究背景与边界
-
-BuildingAI 源于对异构 HVAC/BEMS 运行数据自动语义解释的研究，并将研究方向工程化为桌面工作流、API 边界、可观测性、精选知识和评测体系。
-
-这是一个工程平台 / 研究原型，不是现场调试或生产 BAS 控制器的替代品。COP、诊断和建议在实施前都必须由现场人员结合真实建筑验证。
+这是一个工程平台 / 研究原型，不替代现场调试或生产 BAS 控制器。COP、诊断与节能建议在落地前均应结合真实建筑进行现场验证。

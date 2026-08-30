@@ -14,7 +14,7 @@ Turn heterogeneous BEMS data into understandable energy insights, equipment diag
 ![RAG](https://img.shields.io/badge/Knowledge-RAG-0F766E)
 ![Tests](https://img.shields.io/badge/tests-106%20passed-16A34A)
 
-**[中文说明](README_zh.md)** · [Architecture](docs/architecture.md) · [Knowledge sources](docs/knowledge_sources.md)
+**English | [简体中文](README_zh.md)** · [Architecture](docs/architecture.md) · [Knowledge sources](docs/knowledge_sources.md)
 
 ## What it does
 
