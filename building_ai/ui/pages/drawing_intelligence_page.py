@@ -63,7 +63,13 @@ class DrawingIntelligencePage(QWidget):
     def selected(self): return self.rows[self.list.currentRow()] if self.list.currentRow()>=0 else None
     def review(self,status):
         row=self.selected()
-        if row:self.context.drawings.review_detection(self.context.current_project.project_id,row['detection_id'],status,self.class_choice.currentText() if status=='confirmed' else None); self.refresh_detections()
+        if not row:
+            return
+        self.context.drawings.review_detection(
+            self.context.current_project.project_id, row['detection_id'], status,
+            self.class_choice.currentText() if status == 'confirmed' else None,
+        )
+        self.refresh_detections()
     def map_selected(self):
         row=self.selected()
         if not row or self.map_equipment.currentIndex()<0:return
