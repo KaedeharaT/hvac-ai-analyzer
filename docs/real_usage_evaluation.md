@@ -6,9 +6,11 @@ drawing files, model weights, or project databases.
 
 ## Journey A — complete local BEMS project
 
-1. Opened a persisted local BEMS project in the desktop application.
-2. Restored its imported time series, semantic mappings, equipment groups,
-   deterministic analysis, diagnostics, and opportunities.
+1. Created a local audit project and imported a complete local XLSX BEMS
+   workbook through the product import path.
+2. Ran semantic mapping, equipment grouping, deterministic analysis,
+   diagnostics, and opportunities; then reopened persisted results in the
+   desktop application.
 3. Reviewed Energy Analysis with the available energy, power, temperature,
    delta-T, COP, daily-profile, heatmap, weather, ranking, and period charts.
 4. Queried the AI Assistant for project status, equipment performance, an
