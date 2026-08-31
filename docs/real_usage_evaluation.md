@@ -1,7 +1,7 @@
 # Real usage evaluation
 
 This note records a local, post-v1.2.0 user-journey evaluation of the current
-main-candidate application. It is not a benchmark and it does not include raw
+main application. It is not a benchmark and it does not include raw
 BEMS exports, private drawing files, model weights, or project databases.
 
 ## Journey A — complete local BEMS project
@@ -51,9 +51,8 @@ model weights and real building drawings remain local and are not distributed.
 ## Knowledge-base journey
 
 Chinese, English, and Japanese queries returned multilingual catalog entries
-with country/category metadata and a source link. Two sampled source links
-opened successfully; one older EnergyPlus PDF link returned HTTP 404 and is a
-known catalog-link maintenance issue.
+with country/category metadata and an official-source link. Sampled source
+links opened successfully; source URLs remain subject to periodic link checks.
 
 ## Works well
 

@@ -15,7 +15,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "chilled_water_supply_temperature"
   },
   {
@@ -34,7 +34,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "chilled_water_return_temperature"
   },
   {
@@ -53,7 +53,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "low_delta_t"
   },
   {
@@ -72,7 +72,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "chilled_water_pump"
   },
   {
@@ -91,7 +91,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "chiller"
   },
   {
@@ -110,7 +110,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "heat_pump"
   },
   {
@@ -129,7 +129,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "coefficient_of_performance"
   },
   {
@@ -148,7 +148,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "part_load"
   },
   {
@@ -167,7 +167,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "variable_frequency_drive"
   },
   {
@@ -186,7 +186,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "bypass_valve"
   },
   {
@@ -205,7 +205,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "energy_management"
   },
   {
@@ -224,7 +224,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "equipment_relationship"
   },
   {
@@ -243,7 +243,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "night_energy"
   },
   {
@@ -262,7 +262,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "short_cycling"
   },
   {
@@ -281,7 +281,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "maintenance"
   },
   {
@@ -300,7 +300,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "retrofit"
   },
   {
@@ -319,7 +319,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "sensor_quality"
   },
   {
@@ -338,7 +338,7 @@
     "organization": "Project Haystack",
     "section": "Semantic",
     "source_id": "us_project_haystack",
-    "source_url": "https://project-haystack.org/doc/index",
+    "source_url": "https://www.project-haystack.org/doc/index",
     "title": "air_handling_unit"
   }
 ]
