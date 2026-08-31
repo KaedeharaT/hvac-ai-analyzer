@@ -1,74 +1,87 @@
 # BuildingAI
 
-> **Agentic AI Building Energy Intelligence Platform**
+> **Agentic AI for Building Energy Intelligence**
 
-Turn heterogeneous BEMS data into understandable energy insights, equipment diagnostics, and actionable recommendations through Agentic AI.
+Turn heterogeneous BEMS data and building drawings into equipment-aware energy analysis, diagnostics, and actionable recommendations.
 
-面向异构建筑运行数据的智能能源分析与 Agent 应用平台。
+面向建筑运行数据与图纸的多模态智能能源分析与 Agent 应用平台。
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![CI](https://github.com/KaedeharaT/hvac-ai-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/KaedeharaT/hvac-ai-analyzer/actions/workflows/ci.yml)
 ![PyQt5](https://img.shields.io/badge/Desktop-PyQt5-41CD52)
 ![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)
-![Local LLM](https://img.shields.io/badge/LLM-Local%20open--source-6B4FBB)
+![LLM](https://img.shields.io/badge/LLM-Configurable-6B4FBB)
 ![Agentic AI](https://img.shields.io/badge/AI-Agentic-2563EB)
 ![RAG](https://img.shields.io/badge/Knowledge-RAG-0F766E)
-![Tests](https://img.shields.io/badge/tests-105%20passed-16A34A)
+![Tests](https://img.shields.io/badge/tests-111%20passed-16A34A)
 
-**English | [简体中文](README_zh.md)** · [Architecture](docs/architecture.md) · [Knowledge sources](docs/knowledge_sources.md)
+**English | [简体中文](README_zh.md)** · [Architecture](docs/architecture.md) · [Drawing Intelligence](docs/drawing_intelligence.md) · [Knowledge sources](docs/knowledge_sources.md)
 
 ## What it does
 
-- Understands unfamiliar BEMS / HVAC point names in Chinese, English, and Japanese.
-- Discovers equipment and operating signals, then analyzes energy, power, COP, ΔT, and equipment performance.
-- Turns deterministic findings into clear diagnostics and practical energy-saving next steps.
-- Answers questions with an AI Assistant that uses the selected project's evidence and, when needed, cited engineering knowledge.
-
-![BuildingAI dashboard with a reviewed Project 7](docs/images/dashboard.png)
-
-*A local Project 7 dashboard: measured energy, demand, COP, equipment status, and reviewed operating findings.*
+- Understands unfamiliar Chinese, English, and Japanese BEMS / HVAC point names.
+- Organizes equipment and operating signals into a project-specific equipment context.
+- Calculates only the energy, power, temperature, COP, and ΔT indicators supported by the available data.
+- Presents capability-driven energy analysis with explicit chart scope, axes, units, and legends.
+- Produces HVAC findings from project evidence and deterministic engineering logic, then turns them into practical next steps.
+- Ingests PNG / JPG / JPEG drawings through an optional YOLOv8 adapter, with bounding boxes, human review, and manual equipment association.
+- Answers questions through read-only project tools and a separate, cited multilingual knowledge base.
 
 ## Why it matters
 
 Building energy analysis often starts with a difficult manual task: interpreting hundreds of inconsistent BEMS point names before engineers can tell which equipment matters or what the data means. BuildingAI reduces that setup work by organizing heterogeneous operational data into equipment-aware analysis, then presenting the result as evidence-backed insights that engineers and non-specialists can act on.
 
-It is not a generic chatbot and it has no BAS write path. The project reads, analyzes, explains, and recommends; site teams remain responsible for validation and operational decisions.
+**BuildingAI is not a generic chatbot.** It works with BEMS operational data, drawing evidence, equipment relationships, engineering KPIs, and deterministic findings. The LLM / Agent layer is used for task orchestration, read-only tool use, evidence completion, explanation, and knowledge retrieval. There is no BAS write path: site teams remain responsible for validation and operational decisions.
 
 ## From raw data to action
 
 ```mermaid
 flowchart LR
-    A[BEMS data] --> B[Semantic understanding]
-    B --> C[Project intelligence]
-    X[Drawings] --> Y[Drawing intelligence]
-    Y --> C
-    C --> D[Analytics / diagnosis]
-    D --> E[AI Assistant]
+    A[BEMS CSV / Excel] --> B[Semantic Understanding]
+    D[Building Drawings] --> E[Drawing Intelligence]
+    B --> C[Equipment Context]
+    E --> C
+    C --> F[Energy Analytics]
+    F --> G[Diagnostics]
+    G --> H[Recommendations]
+    H --> I[AI Assistant]
 ```
 
 ## Product experience
 
-### Energy analysis
+### 1. Building Overview
 
-Visualizes available energy consumption, demand, temperature trends, COP, ΔT, and equipment-level performance rather than forcing users to read raw exports.
+The dashboard organizes measured energy, demand, equipment status, and reviewed operational findings into a project-level view that can be read quickly.
+
+![BuildingAI dashboard with a reviewed Project 7](docs/images/dashboard.png)
+
+*Local, anonymized demonstration project.*
+
+### 2. Professional Energy Analysis
+
+Energy Analysis dynamically shows only the indicators the selected project can support: energy, power, temperature, ΔT, COP, typical daily profile, heatmap, and equipment comparison. Each chart exposes its scope, axis meaning, unit, and series legend rather than relying on an unlabeled line.
 
 ![Energy analysis page](docs/images/energy-analysis.png)
 
-### AI Assistant with source-aware answers
+### 3. Evidence-grounded Diagnostics
+
+Findings are derived from actual project data and deterministic engineering logic; general RAG material is used to explain a finding or suggest safe checks, not to invent one. Recommendations remain bounded by the available evidence and require site validation.
+
+### 4. AI Assistant with source-aware answers
 
 The Assistant shows a concise analysis process, separates **Project evidence** from **Reference material**, and makes each cited official source available through the UI. Internal tool identifiers stay inside the technical trace rather than in normal user-facing language.
 
 ![AI Assistant reference-material cards](docs/images/ai-assistant.png)
 
-### Professional knowledge, visible and searchable
+### 5. Professional knowledge, visible and searchable
 
-The built-in knowledge page provides a friendly entry point to multilingual HVAC, operations, and energy-saving guidance—without turning the product into a database console.
+The built-in Knowledge Base is a searchable product page, not a hidden database console: it presents 19 attributed sources, 154 curated chunks, coverage for China / the United States / Japan, and Chinese / English / Japanese retrieval.
 
 ![Knowledge Base page](docs/images/knowledge-base.png)
 
-### Drawing Intelligence
+### 6. Drawing Intelligence
 
-BuildingAI can also ingest architectural / HVAC drawings through an optional YOLO-based vision adapter. Detected objects remain AI predictions until reviewed, and confirmed drawing objects can be linked to project equipment for downstream read-only Agent queries.
+BuildingAI can ingest architectural / HVAC drawings through an optional YOLOv8 vision adapter. Detection boxes remain AI predictions until reviewed; confirmed objects can then be manually linked to project equipment for downstream read-only Agent queries.
 
 ![Synthetic demonstration drawing in Drawing Intelligence](docs/images/drawing-intelligence.png)
 
@@ -263,6 +276,8 @@ It is an engineering platform / research prototype, not a replacement for site c
 
 - [Chinese README](README_zh.md)
 - [Architecture and boundaries](docs/architecture.md)
+- [Local real-usage evaluation](docs/real_usage_evaluation.md)
+- [Drawing Intelligence boundary](docs/drawing_intelligence.md)
 - [Knowledge source registry and licensing](docs/knowledge_sources.md)
 - [Research-to-product mapping](docs/research_to_product.md)
 - [Migration notes](docs/migration.md)

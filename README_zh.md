@@ -1,18 +1,24 @@
 # BuildingAI
 
-### 面向建筑能源分析的 Agentic AI 智能平台
+### 面向建筑能源智能的 Agentic AI 平台
 
-将异构 BEMS / HVAC 运行数据自动转化为：**设备识别、能源分析、运行诊断、节能建议和 AI 问答**。
+将异构 BEMS 数据与建筑图纸转化为：**设备关联的能源分析、运行诊断、节能建议和 AI 问答**。
 
-BuildingAI 面向真实建筑运行数据，结合工程规则、LLM、工具调用与知识检索，实现从陌生 BEMS 数据理解到设备级能源诊断和节能建议生成的完整智能分析流程。
+BuildingAI 面向建筑运行数据与图纸，结合工程规则、可配置 LLM、只读工具调用与可追溯知识检索，形成从陌生 BEMS 数据理解到设备级分析和建议的完整流程。
 
 [![CI](https://github.com/KaedeharaT/hvac-ai-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/KaedeharaT/hvac-ai-analyzer/actions/workflows/ci.yml)
 
-**简体中文 | [English](README.md)** · [架构说明](docs/architecture.md) · [知识来源](docs/knowledge_sources.md)
+**简体中文 | [English](README.md)** · [架构说明](docs/architecture.md) · [图纸智能识别](docs/drawing_intelligence.md) · [知识来源](docs/knowledge_sources.md)
+
+## 产品体验与核心能力
+
+### 1. 建筑总览
+
+系统将测量能耗、需量、设备状态和已复核的运行发现整理成可快速理解的项目概览。
 
 ![BuildingAI 总览](docs/images/dashboard.png)
 
-*Project 7 总览：系统将测量数据、设备状态和运行发现整理为可理解的分析结果。*
+*本地匿名化演示项目。*
 
 ## 这个项目解决什么问题
 
@@ -28,42 +34,44 @@ BuildingAI 的目标，是让系统自动完成一条可审查的分析路径：
 
 ```mermaid
 flowchart LR
-    A[BEMS 数据] --> B[语义理解]
-    B --> C[项目智能]
-    X[图纸] --> Y[图纸智能识别]
-    Y --> C
-    C --> D[能源分析 / 诊断]
-    D --> E[AI Assistant]
+    A[BEMS CSV / Excel] --> B[语义理解]
+    D[建筑图纸] --> E[图纸智能识别]
+    B --> C[设备上下文]
+    E --> C
+    C --> F[能源分析]
+    F --> G[运行诊断]
+    G --> H[节能建议]
+    H --> I[AI Assistant]
 ```
 
-它不是单纯的聊天机器人。项目数据决定当前建筑**发生了什么**；AI 的作用是组织分析、补充证据、解释结果，并把工程判断转化为用户可以执行的下一步。
+它不是单纯的聊天机器人。BuildingAI 处理 BEMS 运行数据、图纸证据、设备关系、工程 KPI 与确定性 Finding；LLM / Agent 只负责任务组织、只读工具调用、证据补充、解释和知识检索。项目数据决定当前建筑**发生了什么**，且系统没有 BAS 写入或控制路径。
 
-## 核心能力
-
-### 自动理解 BEMS 数据
+### 2. 自动理解 BEMS 数据
 
 自动识别不同项目中不统一的点位名称、单位和设备关系，并映射为标准 HVAC 语义。对不可靠或不明确的点位保留人工复核边界，而不是强行猜测。
 
-### 设备与能源分析
+### 3. 专业能源分析
 
-基于项目中实际可用的数据计算和展示：
+Energy Analysis 仅基于当前项目实际可用的数据动态展示，避免为了“有图”而强行计算。可用能力包括：
 
 - 能耗、功率和负荷趋势
 - 温度、流量与设备运行状态
 - COP、ΔT 等设备性能指标
-- 设备之间的表现对比
+- 典型日曲线、热力图和设备对比
+
+每张图明确显示数据范围、设备范围、横轴、纵轴、单位和多序列图例，严格区分 kW 功率与 kWh 能耗。
 
 ![能源分析](docs/images/energy-analysis.png)
 
-### 运行诊断
+### 4. 基于证据的运行诊断
 
 结合工程规则与当前项目证据识别异常运行状态，例如冷冻水利用效率偏低、设备运行表现需要关注等。诊断结论始终保留数据范围和现场验证边界。
 
-### 节能建议
+### 5. 节能建议
 
 将 HVAC 技术诊断转换成普通用户也能理解的检查与改善建议，例如先检查水泵频率、压差控制、旁通阀或末端换热情况，并注明哪些调整需要现场小步验证。
 
-### AI 助手
+### 6. AI Assistant
 
 用户可以直接询问：
 
@@ -73,11 +81,11 @@ flowchart LR
 >
 > “温差偏低应该怎么改善？”
 
-系统会查询当前项目数据、检查现有证据，必要时补充分析，并结合建筑运行知识库生成有依据的回答。
+系统会查询当前项目数据、检查现有证据，必要时补充分析，并结合建筑运行知识库生成有依据的回答。界面将 **Project Evidence** 与 **Reference Material** 分开呈现，避免将通用资料误作现场事实。
 
 ![AI Assistant 中的真实参考资料卡片](docs/images/ai-assistant.png)
 
-### 图纸智能识别
+### 7. 图纸智能识别
 
 BuildingAI 可通过可选 YOLO 视觉适配器识别建筑 / HVAC 图纸中的构件。检测结果先作为 AI Prediction 保存，人工确认后才能用于设备关联。确认后的图纸对象可以与 BuildingAI Equipment 建立关系，Agent 可以只读查询设备在图纸中的关联信息。
 
@@ -141,7 +149,7 @@ Agent 在发现仅有 KPI 不足以解释原因时，会补充运行与诊断证
 
 ## 可见、可搜索的建筑知识库
 
-BuildingAI 内置一个小而可追溯的知识库，而不是不加筛选地堆积 PDF：
+BuildingAI 内置正式可搜索、可追溯的知识库页面，而不是不加筛选地堆积 PDF：
 
 - **19 个可信知识来源**
 - **154 个精选知识片段**
@@ -265,6 +273,8 @@ python -m uvicorn building_ai.api.app:app --host 127.0.0.1 --port 8000
 ```
 
 当前 Release 验证结果：**110 passed**。
+
+本地完整与不完整项目的实际使用流程、持久化和安全拒答检查，见：[真实使用评估](docs/real_usage_evaluation.md)。
 
 ## 项目背景与边界
 
