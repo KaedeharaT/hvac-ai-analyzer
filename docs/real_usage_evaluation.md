@@ -1,8 +1,8 @@
 # Real usage evaluation
 
-This note records a local, user-journey evaluation performed against BuildingAI
-V1.2.0. It is not a benchmark and it does not include raw BEMS exports, private
-drawing files, model weights, or project databases.
+This note records a local, post-v1.2.0 user-journey evaluation of the current
+main-candidate application. It is not a benchmark and it does not include raw
+BEMS exports, private drawing files, model weights, or project databases.
 
 ## Journey A — complete local BEMS project
 
@@ -54,6 +54,23 @@ Chinese, English, and Japanese queries returned multilingual catalog entries
 with country/category metadata and a source link. Two sampled source links
 opened successfully; one older EnergyPlus PDF link returned HTTP 404 and is a
 known catalog-link maintenance issue.
+
+## Works well
+
+- Import, semantic review, equipment discovery, capability-driven analytics,
+  deterministic diagnostics, and persisted project context complete through the
+  desktop workflow on a complete local project.
+- The Assistant uses read-only project evidence and separates it from retrieved
+  knowledge material; follow-up equipment focus persists within the conversation.
+- Drawing review states and human-confirmed equipment associations persist and
+  can be queried through the read-only drawing-location tool.
+
+## Works with limitations
+
+- Historic or partial data can support a subset of charts, but must receive
+  human semantic review before reliable equipment KPI groups are available.
+- The local drawing model is optional and its output is evidence for review,
+  not an automatically confirmed engineering fact.
 
 ## Known limitations found by this evaluation
 

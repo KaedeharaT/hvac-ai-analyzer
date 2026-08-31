@@ -13,9 +13,12 @@ Turn heterogeneous BEMS data and building drawings into equipment-aware energy a
 ![LLM](https://img.shields.io/badge/LLM-Configurable-6B4FBB)
 ![Agentic AI](https://img.shields.io/badge/AI-Agentic-2563EB)
 ![RAG](https://img.shields.io/badge/Knowledge-RAG-0F766E)
-![Tests](https://img.shields.io/badge/tests-111%20passed-16A34A)
 
 **English | [简体中文](README_zh.md)** · [Architecture](docs/architecture.md) · [Drawing Intelligence](docs/drawing_intelligence.md) · [Knowledge sources](docs/knowledge_sources.md)
+
+![BuildingAI dashboard](docs/images/dashboard.png)
+
+*BEMS + Drawings → Equipment Context → Analytics → Diagnostics → AI Assistant. Local, anonymized demonstration project.*
 
 ## What it does
 
@@ -53,10 +56,6 @@ flowchart LR
 
 The dashboard organizes measured energy, demand, equipment status, and reviewed operational findings into a project-level view that can be read quickly.
 
-![BuildingAI dashboard with a reviewed Project 7](docs/images/dashboard.png)
-
-*Local, anonymized demonstration project.*
-
 ### 2. Professional Energy Analysis
 
 Energy Analysis dynamically shows only the indicators the selected project can support: energy, power, temperature, ΔT, COP, typical daily profile, heatmap, and equipment comparison. Each chart exposes its scope, axis meaning, unit, and series legend rather than relying on an unlabeled line.
@@ -67,19 +66,15 @@ Energy Analysis dynamically shows only the indicators the selected project can s
 
 Findings are derived from actual project data and deterministic engineering logic; general RAG material is used to explain a finding or suggest safe checks, not to invent one. Recommendations remain bounded by the available evidence and require site validation.
 
+![Diagnostics findings and recommended actions](docs/images/diagnostics.png)
+
 ### 4. AI Assistant with source-aware answers
 
 The Assistant shows a concise analysis process, separates **Project evidence** from **Reference material**, and makes each cited official source available through the UI. Internal tool identifiers stay inside the technical trace rather than in normal user-facing language.
 
 ![AI Assistant reference-material cards](docs/images/ai-assistant.png)
 
-### 5. Professional knowledge, visible and searchable
-
-The built-in Knowledge Base is a searchable product page, not a hidden database console: it presents 19 attributed sources, 154 curated chunks, coverage for China / the United States / Japan, and Chinese / English / Japanese retrieval.
-
-![Knowledge Base page](docs/images/knowledge-base.png)
-
-### 6. Drawing Intelligence
+### 5. Drawing Intelligence
 
 BuildingAI can ingest architectural / HVAC drawings through an optional YOLOv8 vision adapter. Detection boxes remain AI predictions until reviewed; confirmed objects can then be manually linked to project equipment for downstream read-only Agent queries.
 
@@ -89,28 +84,15 @@ BuildingAI can ingest architectural / HVAC drawings through an optional YOLOv8 v
 
 For example, when asked “Where is AHP-3-3 on the drawing?”, the Agent reads a confirmed drawing mapping and returns the drawing, page, and object information. Without one, it abstains: `No reliable drawing association has been confirmed for this equipment.`
 
-## Key features
+### 6. Knowledge Base
 
-| Capability | What it enables |
-| --- | --- |
-| **Automatic BEMS understanding** | Maps heterogeneous Chinese, Japanese, and English point names to standardized HVAC semantics, with physical consistency checks and human review boundaries. |
-| **Energy & equipment analytics** | Calculates available KPIs and organizes energy, power, temperature, COP, ΔT, and equipment performance. |
-| **Evidence-grounded diagnostics** | Combines deterministic engineering logic with bounded Agent reasoning so project conclusions are not created from general knowledge alone. |
-| **Actionable recommendations** | Converts findings into understandable operations, maintenance, and energy-saving next steps, with site-validation boundaries. |
-| **AI Assistant** | Supports multi-step analysis, read-only tool use, project-scoped memory, knowledge retrieval, reflection, citations, and trace visibility. |
-| **Pluggable LLMs** | Supports local LLM through Ollama plus OpenAI-compatible providers, while core analysis works without an LLM. |
+The searchable Knowledge Base provides multilingual HVAC, operations, and energy-saving guidance with source attribution; the catalog and its scope are described below.
+
+![Knowledge Base page](docs/images/knowledge-base.png)
 
 ## Agentic AI in one real workflow
 
-For a question such as **“Which machine is doing the worst?”**, BuildingAI does more than generate text:
-
-1. Identifies an equipment-analysis task.
-2. Reads equipment KPIs from the selected project.
-3. Checks existing diagnostic findings.
-4. Detects whether the available evidence is incomplete.
-5. Re-plans for additional diagnostic or time-series evidence when needed.
-6. Retrieves engineering guidance only when it can help explain causes or suggest checks.
-7. Produces a bounded answer with project facts and knowledge sources presented separately.
+For a question such as **“Which machine is doing the worst?”**, the Agent plans bounded read-only queries, checks whether project evidence is sufficient, retrieves engineering guidance only when useful, and keeps project facts separate from reference material.
 
 ```mermaid
 flowchart TD
@@ -125,7 +107,7 @@ flowchart TD
     A --> O[Trace, citations, and UI presentation]
 ```
 
-The runtime includes structured routing, bounded planning, tool permissions, evidence checking, reflection / re-plan, conversation and project memory, RAG, and persisted traces. It is deliberately read-only: it does not call building-control protocols or issue operational commands.
+Planning · Tool Calling · Evidence Checking · Reflection · Memory · RAG · Trace. The runtime is deliberately read-only: it does not call building-control protocols or issue operational commands.
 
 ## A curated building-energy knowledge base
 
@@ -208,16 +190,6 @@ flowchart TB
 
 The desktop UI only presents state and starts workflows. Services orchestrate reusable domain functions; core modules do not import PyQt. See the concise [architecture notes](docs/architecture.md) for data, persistence, LLM, and safety boundaries.
 
-## Engineering highlights
-
-- Deterministic engineering logic combined with constrained LLM reasoning
-- Human-review boundary for semantic mapping and operational validation
-- Asynchronous task processing with an optional FastAPI service layer
-- Persistent project context, conversation-scoped memory, and source-aware RAG
-- Agent, tool, LLM, and evidence traces for technical inspection
-- Automated deterministic regression and local LLM end-to-end evaluation
-- Prompt-injection detection and read-only tool-permission boundaries
-
 ## Quick start
 
 BuildingAI supports Python 3.10+.
@@ -254,7 +226,7 @@ The command regenerates curated records, multilingual aliases, portable chunks, 
 python -m pytest
 ```
 
-Current release verification: **110 passed**.
+Current `main` verification: **111 passed**. The `v1.2.0` release tag retains its recorded **110 passed** release verification.
 
 ## Project structure
 

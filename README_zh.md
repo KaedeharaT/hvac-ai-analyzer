@@ -10,15 +10,9 @@ BuildingAI 面向建筑运行数据与图纸，结合工程规则、可配置 LL
 
 **简体中文 | [English](README.md)** · [架构说明](docs/architecture.md) · [图纸智能识别](docs/drawing_intelligence.md) · [知识来源](docs/knowledge_sources.md)
 
-## 产品体验与核心能力
-
-### 1. 建筑总览
-
-系统将测量能耗、需量、设备状态和已复核的运行发现整理成可快速理解的项目概览。
-
 ![BuildingAI 总览](docs/images/dashboard.png)
 
-*本地匿名化演示项目。*
+*BEMS + 图纸 → 设备上下文 → 能源分析 → 运行诊断 → AI Assistant。本地匿名化演示项目。*
 
 ## 这个项目解决什么问题
 
@@ -46,6 +40,12 @@ flowchart LR
 
 它不是单纯的聊天机器人。BuildingAI 处理 BEMS 运行数据、图纸证据、设备关系、工程 KPI 与确定性 Finding；LLM / Agent 只负责任务组织、只读工具调用、证据补充、解释和知识检索。项目数据决定当前建筑**发生了什么**，且系统没有 BAS 写入或控制路径。
 
+## 产品体验
+
+### 1. 建筑总览
+
+系统将测量能耗、需量、设备状态和已复核的运行发现整理成可快速理解的项目概览。
+
 ### 2. 自动理解 BEMS 数据
 
 自动识别不同项目中不统一的点位名称、单位和设备关系，并映射为标准 HVAC 语义。对不可靠或不明确的点位保留人工复核边界，而不是强行猜测。
@@ -66,6 +66,8 @@ Energy Analysis 仅基于当前项目实际可用的数据动态展示，避免�
 ### 4. 基于证据的运行诊断
 
 结合工程规则与当前项目证据识别异常运行状态，例如冷冻水利用效率偏低、设备运行表现需要关注等。诊断结论始终保留数据范围和现场验证边界。
+
+![分析诊断中的 Finding 与建议操作](docs/images/diagnostics.png)
 
 ### 5. 节能建议
 
@@ -111,41 +113,7 @@ flowchart TD
     K --> A[生成有证据支持的回答]
 ```
 
-对应的工程能力包括：
-
-- 多步任务规划与只读 Tool Calling
-- 基于项目数据的 Evidence Checking
-- 信息不足时的 Reflection / Re-plan
-- 会话与项目上下文记忆
-- RAG 知识检索与来源引用
-- Agent、工具、LLM 和证据 Trace
-
-这些能力的目的不是堆叠术语，而是让回答能追溯、能解释，并避免将通用知识误当作现场事实。
-
-## 一个真实案例：AHP-3-3 温差偏低
-
-用户问题：
-
-> “AHP-3-3 温差偏低应该怎么改善？”
-
-系统先读取当前项目的 KPI 和诊断结果。Project 7 中，AHP-3-3 的已记录项目证据为：
-
-| 项目证据 | 结果 |
-| --- | --- |
-| 平均 COP | 3.94 |
-| 平均 ΔT | 5.75°C |
-| 低 ΔT 样本 | 156 / 773 个有效样本 |
-
-Agent 在发现仅有 KPI 不足以解释原因时，会补充运行与诊断证据，并查询建筑运行知识库。最终建议优先检查：
-
-1. 冷冻水泵频率；
-2. 压差控制；
-3. 旁通阀；
-4. 末端换热状况。
-
-任何流量调整都应在现场进行小步验证，并持续观察温差、功率和室内舒适度。
-
-**边界很明确：** Project Data 决定“发生了什么”；Knowledge Base 用于解释“为什么、检查什么、如何改善”。知识库不会自行生成某台设备的项目 Finding。
+Planning · Tool Calling · Evidence Checking · Reflection · Memory · RAG · Trace。它们的目的不是堆叠术语，而是让回答能追溯、能解释，并避免将通用知识误当作现场事实；所有项目工具均为只读。
 
 ## 可见、可搜索的建筑知识库
 
@@ -272,7 +240,7 @@ python -m pip install -r requirements-server.txt
 python -m uvicorn building_ai.api.app:app --host 127.0.0.1 --port 8000
 ```
 
-当前 Release 验证结果：**110 passed**。
+当前 `main` 验证结果：**111 passed**；`v1.2.0` tag 保留其发布时记录的 **110 passed** 验证结果。
 
 本地完整与不完整项目的实际使用流程、持久化和安全拒答检查，见：[真实使用评估](docs/real_usage_evaluation.md)。
 

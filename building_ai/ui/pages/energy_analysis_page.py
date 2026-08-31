@@ -54,7 +54,7 @@ class TimeSeriesChart(QWidget):
         # A generous left gutter keeps engineering units and numeric ticks from
         # colliding at compact desktop widths; the right gutter is reserved for
         # the heatmap colourbar.
-        plot = outer.adjusted(86, 28, -66, -38)
+        plot = outer.adjusted(94, 28, -78, -38)
         painter.setPen(QPen(QColor("#E2E8F0"), 1))
         for part in range(1, 5):
             y = plot.top() + part * plot.height() // 5
@@ -64,8 +64,8 @@ class TimeSeriesChart(QWidget):
         painter.drawLine(plot.left(), plot.top(), plot.left(), plot.bottom())
         painter.setPen(QPen(QColor("#475569")))
         painter.drawText(plot.left(), outer.bottom() - 20, plot.width(), 18, Qt.AlignCenter, self.payload.get("x_label", tr("energy_axis_time")))
-        painter.save(); painter.translate(11, plot.center().y()); painter.rotate(-90)
-        painter.drawText(-plot.height() // 2, -8, plot.height(), 16, Qt.AlignCenter, self.payload.get("y_label", self.payload.get("unit", "")))
+        painter.save(); painter.translate(18, plot.center().y()); painter.rotate(-90)
+        painter.drawText(-plot.height() // 2, -10, plot.height(), 20, Qt.AlignCenter, self.payload.get("y_label", self.payload.get("unit", "")))
         painter.restore()
         return plot
 
@@ -174,6 +174,11 @@ class TimeSeriesChart(QWidget):
         for index in range(plot.height()):
             ratio = 1 - index / max(1, plot.height() - 1); painter.setPen(QPen(QColor(int(238 - 140 * ratio), int(246 - 105 * ratio), int(255 - 24 * ratio)))); painter.drawLine(color_x, plot.top() + index, color_x + 10, plot.top() + index)
         painter.setPen(QPen(QColor("#64748B"))); painter.drawText(color_x + 13, plot.top(), 36, 16, Qt.AlignLeft, self._number(maximum, self.payload.get("unit", ""))); painter.drawText(color_x + 13, plot.bottom() - 14, 36, 16, Qt.AlignLeft, self._number(0, self.payload.get("unit", "")))
+        colorbar_label = self.payload.get("colorbar_label", self.payload.get("unit", ""))
+        if colorbar_label:
+            painter.save(); painter.translate(color_x + 56, plot.center().y()); painter.rotate(-90)
+            painter.drawText(-plot.height() // 2, -8, plot.height(), 16, Qt.AlignCenter, colorbar_label)
+            painter.restore()
 
     def paintEvent(self, event):  # noqa: N802
         painter = QPainter(self); painter.setRenderHint(QPainter.Antialiasing)
@@ -221,6 +226,28 @@ class EnergyAnalysisPage(QWidget):
             "duplicate_timestamps_require_resolution": "energy_reason_duplicate_time",
         }
         return tr(requirements.get(reason, "energy_no_data"))
+
+    @staticmethod
+    def _temperature_axis_label(payload: dict) -> str:
+        units = {str(item.get("unit") or "").strip() for item in payload.get("series", [])}
+        units.discard("")
+        if len(units) == 1:
+            unit = next(iter(units))
+            return tr("energy_axis_temperature_with_unit", unit=unit)
+        return tr("energy_axis_temperature_mixed")
+
+    @staticmethod
+    def _quality_warning_text(warning: str) -> str:
+        code = str(warning).split(":", 1)[0]
+        keys = {
+            "unknown_or_unsupported_energy_unit": "energy_warning_energy_unit",
+            "unknown_or_unsupported_power_unit": "energy_warning_power_unit",
+            "negative_energy": "energy_warning_negative_energy",
+            "negative_power": "energy_warning_negative_power",
+            "impossible_temperature": "energy_warning_temperature_range",
+            "outlier_values": "energy_warning_outliers",
+        }
+        return tr(keys.get(code, "energy_warning_generic"))
 
     def __init__(self, context):
         super().__init__(); self.context = context; self.i18n = LanguageManager.instance(); self.i18n.language_changed.connect(self.retranslate_ui)
@@ -306,6 +333,13 @@ class EnergyAnalysisPage(QWidget):
                 continue
             payload = dict(payload)
             payload["x_label"] = tr(x_key); payload["y_label"] = tr(y_key)
+            if code == "temperature_trend":
+                payload["y_label"] = self._temperature_axis_label(payload)
+            elif code == "weather_correlation":
+                payload["x_label"] = tr("energy_axis_outdoor_temperature_with_unit", unit=payload.get("x_unit") or "—")
+                payload["y_label"] = tr("energy_axis_building_power_with_unit", unit=payload.get("y_unit") or "—")
+            elif code == "load_heatmap":
+                payload["colorbar_label"] = tr("energy_axis_power")
             card = QFrame(); card.setObjectName("Card"); box = QVBoxLayout(card); title = QLabel(tr(title_key)); title.setObjectName("CardTitle"); box.addWidget(title)
             scope = QLabel(tr("energy_chart_scope", start=TimeSeriesChart._scope_time(result.start), end=TimeSeriesChart._scope_time(result.end), interval=(f"{result.sampling_interval_minutes:g}" if result.sampling_interval_minutes else "—"), equipment=(self.equipment.currentText() if self.equipment.currentData() else tr("analysis_all_equipment")))); scope.setObjectName("Muted"); scope.setWordWrap(True); box.addWidget(scope)
             chart = TimeSeriesChart(kind); chart.set_payload(payload); box.addWidget(chart)
@@ -323,7 +357,9 @@ class EnergyAnalysisPage(QWidget):
                 if column == 2:
                     row += 1; column = 0
         if result.warnings or q["warnings"]:
-            notice = QLabel(tr("energy_quality_warning", warnings=", ".join([*q["warnings"], *result.warnings][:5]))); notice.setObjectName("Muted"); notice.setWordWrap(True)
+            warnings = list(dict.fromkeys([*q["warnings"], *result.warnings]))[:5]
+            detail = "; ".join(dict.fromkeys(self._quality_warning_text(item) for item in warnings))
+            notice = QLabel(tr("energy_quality_warning", warnings=detail)); notice.setObjectName("Muted"); notice.setWordWrap(True)
             # Place quality guidance below the data visuals so it is never
             # mistaken for a chart or an engineering conclusion.
             if column:
