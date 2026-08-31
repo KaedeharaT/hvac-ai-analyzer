@@ -10,6 +10,12 @@ from building_ai.storage import Database
 
 class _Tools:
     def call(self, name, **kwargs):
+        if name == 'get_equipment_drawing_location':
+            equipment_id = kwargs.get('equipment_id')
+            return SimpleNamespace(ok=True, data={
+                'equipment_id': equipment_id, 'reliable': equipment_id == 'CH-01',
+                'locations': ([{'file_name': 'plan.png', 'page_number': 1, 'reviewed_class': 'aircon', 'class_name': 'aircon'}] if equipment_id == 'CH-01' else []),
+            }, error=None)
         payload = [] if name == 'get_diagnostic_findings' else {'tool': name, **kwargs}
         return SimpleNamespace(ok=True, data=payload, error=None)
 
@@ -73,3 +79,14 @@ def test_project_recommendation_uses_project_tools_and_real_catalog_sources(tmp_
     assert {'get_energy_opportunities', 'get_diagnostic_findings', 'get_analysis_results', 'search_knowledge'} <= {item['tool'] for item in trace['tool_calls']}
     assert result.sources
     assert result.sources[0]['citation']
+
+
+def test_drawing_question_uses_read_only_location_tool_and_abstains_when_unmapped(tmp_path):
+    runtime, _, database = _runtime(tmp_path)
+    found = runtime.run('Where is CH-01 on the drawing?', 'project-a', 'drawing-a')
+    missing = runtime.run('Where is HP-02 on the drawing?', 'project-a', 'drawing-b')
+    assert found.tools_used == ['get_equipment_drawing_location']
+    assert 'plan.png' in found.answer and not found.abstained
+    assert missing.tools_used == ['get_equipment_drawing_location']
+    assert missing.abstained
+    assert TraceStore(database).get(missing.trace_id)['intent'] == 'drawing_query'

@@ -12,7 +12,7 @@ from building_ai.knowledge import KnowledgeService
 from building_ai.security import contains_prompt_injection, find_untrusted_instruction_paths
 
 class Route(BaseModel):
-    intent: Literal['general_chat','general_hvac_knowledge','project_summary','energy_analysis','equipment_analysis','diagnosis','recommendation','knowledge_search']
+    intent: Literal['general_chat','general_hvac_knowledge','project_summary','energy_analysis','equipment_analysis','diagnosis','recommendation','knowledge_search','drawing_query']
     confidence: float; requires_project: bool; requires_tools: bool; requires_knowledge: bool=False
 class PlanStep(BaseModel): tool:str; arguments:dict; purpose:str
 class Plan(BaseModel): steps:list[PlanStep]
@@ -21,6 +21,8 @@ class AgentRuntime:
     def __init__(self,context): self.context=context
     def route(self,q:str)->Route:
         x=q.casefold()
+        if any(t in x for t in ('图纸', 'drawing', 'floor plan', 'where is')):
+            return Route(intent='drawing_query',confidence=.95,requires_project=True,requires_tools=True)
         if any(t in x for t in ('你是谁','who are you','你会什么','what can you do','introduce yourself','assistant are you','你能帮我')): return Route(intent='general_chat',confidence=.99,requires_project=False,requires_tools=False)
         if any(t in x for t in ('一般','冷冻水','hvac','暖通','delta t','δt','chilled water','chilled-water','pump','first checks','common hvac','part load')): return Route(intent='general_hvac_knowledge',confidence=.9,requires_project=False,requires_tools=False,requires_knowledge=True)
         if any(t in x for t in ('project overview','project 7','项目目前','项目总览','project results')): intent='project_summary'
@@ -48,11 +50,18 @@ class AgentRuntime:
             # Short follow-ups such as "what should I do first?" commonly
             # omit a pronoun.  Keep the conversation-scoped focus available
             # to the existing planner without changing general chat requests.
-            if equipment_id and equipment_id.casefold() not in q.casefold() and not any(token in q.casefold() for token in ('who are you','你是谁','what can you do','你会什么')):
+            if equipment_id and equipment_id.casefold() not in q.casefold() and not any(token in q.casefold() for token in ('who are you','你是谁','what can you do','你会什么','哪些设备','设备有哪些','what equipment','equipment list')):
                 q=f'{q} {equipment_id}'
         equipment=self.context.agent_controller._equipment_name(q)
         if equipment and pid: memory.put(pid,conversation_id,'focus','equipment',{'equipment_id':equipment})
-        r=self.route(q); plan=self.plan(r,pid); evidence={}; knowledge=KnowledgeService(self.context.database); registry=ToolRegistry(self.context.agent.tools,knowledge); events=[]
+        r=self.route(q); plan=self.plan(r,pid)
+        if r.intent == 'drawing_query':
+            plan = Plan(steps=[PlanStep(
+                tool='get_equipment_drawing_location' if equipment else 'get_drawing_summary',
+                arguments={'project_id': pid, **({'equipment_id': equipment} if equipment else {})},
+                purpose='drawing_query',
+            )])
+        evidence={}; knowledge=KnowledgeService(self.context.database); registry=ToolRegistry(self.context.agent.tools,knowledge); events=[]
         if r.intent=='general_hvac_knowledge' or (equipment and r.intent=='recommendation'):
             chunks=registry.call('search_knowledge',KnowledgeArgs(query=q,top_k=3)); evidence['search_knowledge']={'chunks':chunks}; events.append({'tool':'search_knowledge','success':True})
         for step in plan.steps:
@@ -72,6 +81,37 @@ class AgentRuntime:
             answer=f'I cannot provide a reliable project answer: {abstention_reason}.'
         elif not plan.steps:
             answer=self.context.agent_controller.answer(q,llm_event=llm_calls.append)
+        elif r.intent == 'drawing_query':
+            location = evidence.get('get_equipment_drawing_location', {})
+            if location.get('reliable'):
+                row = location['locations'][0]
+                answer = (f"{location['equipment_id']} 已关联到图纸 {row['file_name']}，第 {row['page_number']} 页，对象 {row['reviewed_class'] or row['class_name']}。"
+                          if bool(re.search(r"[\u4e00-\u9fff]", q)) else
+                          f"{location['equipment_id']} is associated with {row['file_name']}, page {row['page_number']}, object {row['reviewed_class'] or row['class_name']}.")
+            elif equipment:
+                answer = (f"{equipment} 当前尚未建立可靠的图纸设备关联。" if bool(re.search(r"[\u4e00-\u9fff]", q)) else f"No reliable drawing association has been confirmed for {equipment}.")
+            else:
+                answer = ("请先指定设备编号，才能查询其已确认的图纸位置。" if bool(re.search(r"[\u4e00-\u9fff]", q)) else "Specify an equipment ID to query a confirmed drawing location.")
+        elif r.intent in {'diagnosis', 'equipment_analysis'} and hasattr(self.context.agent_controller, '_grounded_fallback'):
+            # The planner's evidence is intentionally compact.  Rendering a
+            # diagnosis/equipment answer from an absent project-summary tool
+            # used to produce a misleading "0 rows" fallback.  Reuse the
+            # controller's validated analysis view instead; it does not make
+            # another inference or change the read-only tool boundary.
+            chinese = bool(re.search(r"[\u4e00-\u9fff]", q))
+            named_equipment = self.context.agent_controller._equipment_name(q)
+            if named_equipment:
+                answer = self.context.agent_controller._grounded_fallback(named_equipment, chinese)
+            elif any(token in q.casefold() for token in ('最低', '最差', 'lowest', 'worst')):
+                answer = self.context.agent_controller._lowest_cop_answer(chinese)
+                if chinese:
+                    answer += " 当前没有足够的确定性证据把该 KPI 排名归因于单一原因。"
+                else:
+                    answer += " Current evidence does not support assigning that KPI ranking to a single cause."
+            elif 'cop' in q.casefold():
+                answer = self.context.agent_controller._lowest_cop_answer(chinese)
+            else:
+                answer = self.context.agent_controller._grounded_fallback(None, chinese)
         elif hasattr(self.context.agent_controller, 'grounded_answer'):
             # A renderer may use the configured provider, but receives only
             # formal tool evidence after routing/planning is complete.
@@ -87,7 +127,10 @@ class AgentRuntime:
         # Abstention is a structured evidence decision.  Do not infer it from
         # ordinary explanatory wording returned by an LLM (for example a valid
         # answer mentioning that a secondary detail is insufficient).
-        abstained=bool(abstention_reason)
+        abstained=bool(abstention_reason or (
+            r.intent == 'drawing_query' and equipment and
+            not evidence.get('get_equipment_drawing_location', {}).get('reliable')
+        ))
         TraceStore(self.context.database).save({'trace_id':trace_id,'project_id':pid,'conversation_id':conversation_id,'query':q,'intent':r.intent,'plan':[s.model_dump() for s in plan.steps],'tool_calls':events,'evidence_checks':[initial.value,final],'reflections':reflections,'memory_used':[{'type':'focus','summary':focus}] if focus else [],'knowledge_sources':sources,'llm_calls':llm_calls,'security':{'prompt_injection_detected':bool(unsafe_paths),'untrusted_instruction_paths':unsafe_paths},'answer':answer,'grounded':bool(plan.steps),'abstained':abstained,'status':'ABSTAINED' if abstained else 'SUCCEEDED'})
         return RuntimeResult(answer=answer,trace_id=trace_id,tools_used=[x['tool'] for x in events],grounded=bool(plan.steps),abstained=abstained,sources=sources)
 

@@ -103,7 +103,7 @@ class EnergyAnalysisService:
                 if iqr > 0 and ((numeric < q1 - 4 * iqr) | (numeric > q3 + 4 * iqr)).any(): quality["warnings"].append(f"outlier_values:{point.raw_name}")
             owner = normalize_equipment_id(point.effective_equipment_id)
             if equipment_filter and owner != equipment_filter: continue
-            item = EnergySeries(point.point_id, point.raw_name, owner, names.get(owner, owner), quantity or "unknown", point.unit, pd.Series(values.to_numpy(), index=timestamps))
+            item = EnergySeries(point.point_id, self._series_name(point, names.get(owner, owner)), owner, names.get(owner, owner), quantity or "unknown", point.unit, pd.Series(values.to_numpy(), index=timestamps))
             if quantity == "power":
                 factor = self.POWER_FACTORS.get(self._unit(point.unit))
                 if factor is None: item.warnings.append("unknown_or_unsupported_power_unit"); rejected_warnings.extend(item.warnings)
@@ -142,6 +142,21 @@ class EnergyAnalysisService:
     @staticmethod
     def _quantity_from_label(label: str) -> str | None:
         return "temperature" if label.endswith("_temp") else "flow" if label.endswith("_flow") else "power" if label.endswith("_power") else "energy" if label.endswith("_energy") else None
+
+    @staticmethod
+    def _series_name(point, equipment_name: str | None) -> str:
+        """Present a mapped engineering role, not an opaque semantic ID."""
+        roles = {
+            "heat_source_supply_temp": "Supply water temperature",
+            "heat_source_return_temp": "Return water temperature",
+            "terminal_supply_air_temp": "Supply air temperature",
+            "terminal_return_air_temp": "Return air temperature",
+            "outdoor_air_temp": "Outdoor air temperature",
+            "heat_source_power": "Input power",
+            "heat_source_energy": "Energy consumption",
+        }
+        label = roles.get(point.effective_label, point.raw_name)
+        return f"{equipment_name}: {label}" if equipment_name else label
 
     @staticmethod
     def _timestamps(df: pd.DataFrame, metadata: dict[str, Any]) -> pd.Series | None:
@@ -203,11 +218,11 @@ class EnergyAnalysisService:
         if energy:
             total = pd.concat([x.energy_kwh.rename(x.name) for x in energy if x.energy_kwh is not None], axis=1).sum(axis=1, min_count=1)
             if total.notna().any():
-                charts["energy_trend"] = {"unit": "kWh", "aggregation": rule, "series": [{"name": "Energy", "data": self._aggregate(total, rule)}]}
+                charts["energy_trend"] = {"unit": "kWh", "aggregation": rule, "series": [{"name": "Building total energy", "data": self._aggregate(total, rule)}]}
         if power:
             total = pd.concat([x.values for x in power], axis=1).sum(axis=1, min_count=1)
             if total.notna().any():
-                charts["power_trend"] = {"unit": "kW", "aggregation": rule, "series": [{"name": "Power", "data": self._aggregate(total, rule, "mean")}], "peak_kw": float(total.max()), "peak_time": total.idxmax().isoformat(), "average_kw": float(total.mean())}
+                charts["power_trend"] = {"unit": "kW", "aggregation": rule, "series": [{"name": "Building total power", "data": self._aggregate(total, rule, "mean")}], "peak_kw": float(total.max()), "peak_time": total.idxmax().isoformat(), "average_kw": float(total.mean())}
                 hourly = total.resample("h").mean()
                 profile = hourly.groupby([hourly.index.weekday < 5, hourly.index.strftime("%H:00")]).mean()
                 charts["daily_load_profile"] = {"unit": "kW", "series": [{"name": "Weekday" if bool(k) else "Weekend", "data": [{"time": t, "value": float(v)} for (_, t), v in profile[profile.index.get_level_values(0) == k].items()]} for k in sorted(profile.index.get_level_values(0).unique(), reverse=True)]}

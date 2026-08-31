@@ -134,6 +134,17 @@ class AgentController:
                 lines.append(f"项目 {summary.get('project_name')}：已读取持久化数据，共 {summary.get('number_of_rows', 0)} 行、{summary.get('number_of_points', 0)} 个点位。")
                 names = summary.get("discovered_equipment", []); lines.append("设备：" + ("、".join(names) if names else "当前未发现可确认设备。"))
                 lines.append(f"时间范围：{summary.get('time_range', {}).get('start') or '—'} ～ {summary.get('time_range', {}).get('end') or '—'}；采样间隔：{summary.get('sampling_interval') or '—'}。")
+                if any(token in text for token in ("可以分析什么", "分析什么", "available analysis", "what can be analyzed")):
+                    labels = {
+                        "temperature_trend": "温度趋势", "energy_consumption": "能耗", "power_trend": "功率趋势",
+                        "delta_t": "供回水温差", "cop": "COP", "daily_profile": "典型日功率曲线",
+                        "heatmap": "功率热力图", "weather_correlation": "室外温度与功率关系",
+                        "equipment_ranking": "设备能耗排名", "period_comparison": "周期对比",
+                    }
+                    available = [labels[key] for key in summary.get("available_analyses", []) if key in labels]
+                    lines.append("当前可可靠分析：" + ("、".join(available) if available else "没有可可靠计算的 KPI。"))
+                    if "cop" not in summary.get("available_analyses", []):
+                        lines.append("COP 当前不可可靠计算：需要供水温度、回水温度、流量和功率均已可靠映射。")
             if isinstance(energy, dict) and energy.get("summary"):
                 values = energy["summary"]
                 def number(key):
