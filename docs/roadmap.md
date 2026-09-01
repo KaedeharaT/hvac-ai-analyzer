@@ -1,5 +1,9 @@
 # Roadmap
 
+> Historical planning document. Status labels below describe the migration plan
+> at the time it was written, not the current product capability set. See the
+> README and architecture documentation for current scope.
+
 ## V0 — Research code migration
 
 - Preserve C1–C8 source, taxonomy, Direct Prompt variants, deterministic settings, and tests.

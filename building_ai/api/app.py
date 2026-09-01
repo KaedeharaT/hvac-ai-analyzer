@@ -5,13 +5,14 @@ from building_ai.ui.context import ApplicationContext
 from building_ai.application.tasks import TaskService
 from building_ai.agent_runtime import AgentRuntime
 from building_ai.observability import TraceStore
+from building_ai import __version__
 
 def create_app(context=None):
     try:
         from fastapi import FastAPI, HTTPException
     except ImportError as exc:
         raise RuntimeError('FastAPI is required for the API server. Install requirements-server.txt.') from exc
-    ctx=context or ApplicationContext(Settings.load()); tasks=TaskService(ctx.database,ctx); app=FastAPI(title='BuildingAI API',version='1.0')
+    ctx=context or ApplicationContext(Settings.load()); tasks=TaskService(ctx.database,ctx); app=FastAPI(title='BuildingAI API',version=__version__)
     def result(data=None, error=None): return {'success':error is None,'data':data,'error':error,'trace_id':None,'request_id':None}
     @app.get('/health')
     def health(): return result({'api':'ok','storage':'ok','queue':'local','worker':'available','llm':ctx.llm_manager.get_provider().display_name})

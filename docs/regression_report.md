@@ -1,4 +1,7 @@
-# Regression report
+# Historical v1.1 regression report
+
+> Archived 2026-07-31 verification snapshot. Its test count is not the current
+> main test count; consult the README and CI workflow for current-main checks.
 
 Date: 2026-07-31
 

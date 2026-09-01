@@ -1,4 +1,8 @@
-# Legacy source inventory
+# Historical source-system inventory
+
+> This is an audit of the read-only pre-product source system, not a file map of
+> the current repository. Paths under `legacy/` describe migration destinations
+> considered during that audit and are not expected to exist in BuildingAI now.
 
 Inventory date: 2026-07-31. Source root:
 `<legacy-source-root>` (read-only). The new product root was excluded from all scans.

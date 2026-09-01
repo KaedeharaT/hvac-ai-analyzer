@@ -8,5 +8,5 @@ class FakeDrawingDetector(BaseDrawingDetector):
     def is_available(self) -> bool: return True
     def load_model(self) -> None: pass
     def get_model_info(self): return DrawingModelInfo("fake_drawing", "Fake Drawing Detector", "test", "")
-    def get_classes(self): return ("aircon", "window", "baseline")
+    def get_classes(self): return ("aircon", "baseline_mark", "window")
     def detect(self, image): return self.rows

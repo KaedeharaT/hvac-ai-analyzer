@@ -1,4 +1,10 @@
-# Migration report
+# Historical migration report
+
+> This document preserves the initial research-to-product migration record. It
+> is not a current capability or validation report. References to `legacy/`
+> describe the migration target considered at that time; they do not claim that
+> the current repository contains a live `legacy/` directory. For current
+> behavior, use the README, architecture documentation, and CI.
 
 ## Safety boundary
 

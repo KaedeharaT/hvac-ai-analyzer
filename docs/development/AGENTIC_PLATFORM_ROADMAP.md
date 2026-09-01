@@ -1,5 +1,9 @@
 # BuildingAI Agentic Platform Roadmap
 
+> Archived development snapshot. The checklist and test references below are
+> not current-main status; the README and CI workflow are the current sources of
+> truth for shipped capabilities and verification.
+
 ## Architecture
 
 `PyQt / FastAPI -> ApplicationContext -> deterministic BEMS analysis core` with a

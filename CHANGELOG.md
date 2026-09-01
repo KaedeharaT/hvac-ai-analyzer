@@ -1,5 +1,9 @@
 # Changelog
 
+> Release entries are immutable records for their tagged versions. The v1.2.0
+> validation below applies to that release tag; `main` may contain later
+> documentation and UI improvements. See the README and CI status for current-main verification.
+
 ## v1.2.0
 
 ### Added

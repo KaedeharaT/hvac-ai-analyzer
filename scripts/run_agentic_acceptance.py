@@ -49,7 +49,7 @@ def verify_e2e_smoke():
  artifact=ROOT/'artifacts'/'evaluation'/'e2e'/'latest.json'
  try:
   payload=json.loads(artifact.read_text(encoding='utf-8')); metrics=payload['metrics']; categories={row['category'] for row in payload['cases']}
-  valid=(payload.get('evaluation_type')=='local_llm_end_to_end' and payload.get('runner_successful') is True and payload.get('provider')=='local_llm' and payload.get('case_count',0)>=50 and payload.get('real_llm_calls',0)>0 and float(metrics.get('Average LLM Latency',0))>0 and E2E_REQUIRED_CATEGORIES <= categories)
+  valid=(payload.get('evaluation_type') in {'local_llm_end_to_end','local_qwen_end_to_end'} and payload.get('runner_successful') is True and payload.get('provider') in {'local_llm','local_qwen'} and payload.get('case_count',0)>=50 and payload.get('real_llm_calls',0)>0 and float(metrics.get('Average LLM Latency',0))>0 and E2E_REQUIRED_CATEGORIES <= categories)
   return {'status':'PASS','evidence':f"real local LLM artifact: {payload['case_count']} cases, {payload['real_llm_calls']} calls"} if valid else {'status':'FAIL','evidence':'missing real local LLM E2E evidence, latency, coverage, or artifact'}
  except (OSError,json.JSONDecodeError,KeyError,TypeError,ValueError): return {'status':'FAIL','evidence':'E2E evaluation artifact could not be verified'}
 def main():

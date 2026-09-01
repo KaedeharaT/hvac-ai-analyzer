@@ -20,7 +20,7 @@ downloaded web pages.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | US | Project Haystack | Documentation | Semantic / points | [docs](https://www.project-haystack.org/doc/index) | English | AFL-3.0; structured facts | `OPEN_FULLTEXT` |
 | US | Brick Schema | Relationships | Ontology / topology | [docs](https://docs.brickschema.org/brick/relationships.html) | English | Public ontology summaries | `OPEN_FULLTEXT` |
-| US | Brick / ASHRAE 223 public docs | Connections overview | Topology | [docs](https://reconciliation.brickschema.org/modeling/connections.html) | English | No paid ASHRAE text | `PUBLIC_SUMMARY` |
+| US | Brick / ASHRAE 223 public docs | Connections overview | Topology | [docs](https://docs.brickschema.org/modeling/connections.html) | English | No paid ASHRAE text | `PUBLIC_SUMMARY` |
 | US | DOE / NREL | EnergyPlus Engineering Reference | Chiller / COP / load | [reference](https://energyplus.net/assets/nrel_custom/pdfs/pdfs_v26.1.0/EngineeringReference.pdf) | English | Official factual summaries | `PUBLIC_SUMMARY` |
 | US | DOE FEMP | O&M Best Practices | O&M / commissioning | [guidance](https://www.energy.gov/cmei/femp/articles/operations-and-maintenance-best-practices-guide-achieving-operational-efficiency) | English | Government public guidance | `PUBLIC_SUMMARY` |
 | US | DOE Better Buildings | Process Cooling and HVAC | Pump / chiller / retrofit | [guidance](https://betterbuildingssolutioncenter.energy.gov/better-plants/process-cooling-and-hvac) | English | Government public guidance | `PUBLIC_SUMMARY` |

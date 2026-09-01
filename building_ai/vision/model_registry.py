@@ -11,4 +11,4 @@ class DrawingModelRegistry:
     def configured(self) -> bool:
         return bool(self.model_path and Path(self.model_path).is_file())
     def get(self) -> DrawingModelInfo:
-        return DrawingModelInfo("legacy_yolov8_drawing", "Legacy YOLOv8 Drawing Detector", "ultralytics", self.model_path, ("aircon", "window", "baseline"), "legacy", "Detects only the legacy research classes: Air Conditioner, Window, and Baseline.")
+        return DrawingModelInfo("legacy_yolov8_drawing", "Legacy YOLOv8 Drawing Detector", "ultralytics", self.model_path, ("aircon", "baseline_mark", "window"), "legacy", "Detects only the legacy research classes: Air Conditioner, Baseline Mark, and Window.")
