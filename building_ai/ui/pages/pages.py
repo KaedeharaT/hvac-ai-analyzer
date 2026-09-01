@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
 )
 
 from building_ai.i18n import LanguageManager, tr
-from building_ai.agent_runtime import AgentRuntime
+from building_ai.agent_runtime_factory import create_agent_runtime
 from building_ai.memory import MemoryStore
 from building_ai.observability import TraceStore
 from building_ai.core.equipment_identity import normalize_equipment_id
@@ -1076,11 +1076,11 @@ class AgentPage(BasePage):
         self.set_input_enabled(False)
         project = self.context.current_project
         project_id = project.project_id if project else None
-        runtime = AgentRuntime(self.context)
+        runtime = create_agent_runtime(self.context)
         route = runtime.route(text); plan = runtime.plan(route, project_id) if project_id else None
         self._current_process = AgentProcessCard(route, plan); self.transcript.append(self._current_process); self.transcript.scroll_to_bottom(self.chat_scroll)
         self._request_started = time.monotonic()
-        self._agent_worker = AgentWorker(lambda message: AgentRuntime(self.context).run(message, project_id, self._conversation_id), text)
+        self._agent_worker = AgentWorker(lambda message: create_agent_runtime(self.context).run(message, project_id, self._conversation_id), text)
         self._agent_worker.completed.connect(self._agent_completed)
         self._agent_worker.failed.connect(self._agent_failed)
         self._agent_worker.start()
@@ -1164,8 +1164,9 @@ class SettingsPage(BasePage):
         self.api_base = QLineEdit(context.settings.api_base); self.api_key = QLineEdit(context.settings.api_key); self.api_key.setEchoMode(QLineEdit.Password)
         self.ollama_url = QLineEdit(context.settings.ollama_url); self.model_path = QLineEdit(context.settings.local_model_path); self.device = QComboBox(); self.device.addItems(["auto", "cpu", "cuda", "mps"]); self.device.setCurrentText(context.settings.local_device)
         self.language = QComboBox(); self.language.addItem("English", "en_US"); self.language.addItem("中文", "zh_CN"); self.language.setCurrentIndex(1 if context.settings.language == "zh_CN" else 0)
+        self.agent_mode = QComboBox(); self.agent_mode.addItem(tr("agent_mode_single"), "single"); self.agent_mode.addItem(tr("agent_mode_multi"), "multi"); self.agent_mode.setCurrentIndex(max(0, self.agent_mode.findData(context.settings.agent_mode)))
         self.data_dir = QLineEdit(str(context.settings.data_dir)); self.data_dir.setReadOnly(True)
-        self.fields = [("llm_provider", self.provider), ("detection_status", self.detection_status), ("model", self.model), ("api_base", self.api_base), ("api_key", self.api_key), ("model_path", self.model_path), ("device", self.device), ("language", self.language), ("data_directory", self.data_dir)]
+        self.fields = [("llm_provider", self.provider), ("detection_status", self.detection_status), ("model", self.model), ("api_base", self.api_base), ("api_key", self.api_key), ("model_path", self.model_path), ("device", self.device), ("agent_mode", self.agent_mode), ("language", self.language), ("data_directory", self.data_dir)]
         self.form_labels: dict[QWidget, QLabel] = {}
         for key, widget in self.fields:
             label = QLabel(); self.form_labels[widget] = label; self.form.addRow(label, widget)
@@ -1181,6 +1182,9 @@ class SettingsPage(BasePage):
         current = self.provider.currentData() or self.context.settings.provider; self.provider.blockSignals(True); self.provider.clear()
         for provider_id, text_key in self.PROVIDERS: self.provider.addItem(tr(text_key), provider_id)
         self.provider.setCurrentIndex(max(0, self.provider.findData(current))); self.provider.blockSignals(False)
+        mode = self.agent_mode.currentData() or self.context.settings.agent_mode; self.agent_mode.blockSignals(True); self.agent_mode.clear()
+        self.agent_mode.addItem(tr("agent_mode_single"), "single"); self.agent_mode.addItem(tr("agent_mode_multi"), "multi")
+        self.agent_mode.setCurrentIndex(max(0, self.agent_mode.findData(mode))); self.agent_mode.blockSignals(False)
         for key, widget in self.fields: self.form_labels[widget].setText(tr(key))
         self.ollama_label.setText(tr("ollama_url"))
         self.redetect_button.setText(tr("redetect")); self.advanced_button.setText(tr("advanced_settings")); self.test_button.setText(tr("test_connection")); self.save_button.setText(tr("save_settings")); self.update_provider_fields(detect=False)
@@ -1201,7 +1205,7 @@ class SettingsPage(BasePage):
         self.ollama_label.setVisible(self.ollama_url.isVisible())
 
     def _apply_to_context(self):
-        settings = self.context.settings; settings.provider = self.provider.currentData(); settings.model = self.model.currentText().strip(); settings.api_base = self.api_base.text().strip().rstrip("/"); settings.api_key = self.api_key.text().strip(); settings.ollama_url = self.ollama_url.text().strip().rstrip("/"); settings.local_model_path = self.model_path.text().strip(); settings.local_device = self.device.currentText(); settings.language = self.language.currentData(); settings.__post_init__(); self.context.reload_llm()
+        settings = self.context.settings; settings.provider = self.provider.currentData(); settings.model = self.model.currentText().strip(); settings.api_base = self.api_base.text().strip().rstrip("/"); settings.api_key = self.api_key.text().strip(); settings.ollama_url = self.ollama_url.text().strip().rstrip("/"); settings.local_model_path = self.model_path.text().strip(); settings.local_device = self.device.currentText(); settings.agent_mode = self.agent_mode.currentData(); settings.language = self.language.currentData(); settings.__post_init__(); self.context.reload_llm()
         window = self.window()
         if hasattr(window, "update_status"):
             window.update_status()

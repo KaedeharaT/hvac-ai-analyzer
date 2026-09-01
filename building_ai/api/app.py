@@ -3,7 +3,7 @@ from __future__ import annotations
 from building_ai.config import Settings
 from building_ai.ui.context import ApplicationContext
 from building_ai.application.tasks import TaskService
-from building_ai.agent_runtime import AgentRuntime
+from building_ai.agent_runtime_factory import create_agent_runtime
 from building_ai.observability import TraceStore
 from building_ai import __version__
 
@@ -58,7 +58,10 @@ def create_app(context=None):
         project_id, message = payload.get('project_id'), str(payload.get('message','')).strip()
         if not message: raise HTTPException(422,detail=result(error={'code':'VALIDATION_ERROR'}))
         if project_id: ctx.ensure_project_loaded(project_id)
-        response=AgentRuntime(ctx).run(message,project_id)
+        try:
+            response=create_agent_runtime(ctx, payload.get('agent_mode', 'single')).run(message,project_id)
+        except ValueError as exc:
+            raise HTTPException(422,detail=result(error={'code':'VALIDATION_ERROR','message':str(exc)})) from exc
         return result({**response.model_dump(),'project_id':project_id,'sources':response.sources})
     @app.get('/traces')
     def traces(): return result(TraceStore(ctx.database).list())

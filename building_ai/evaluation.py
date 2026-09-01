@@ -21,6 +21,7 @@ from building_ai.agent_runtime import AgentRuntime
 from building_ai.knowledge import KnowledgeService
 from building_ai.observability import TraceStore
 from building_ai.storage import Database
+from building_ai.multi_agent_runtime import MULTI_AGENT_ARCHITECTURE_VERSION, MultiAgentRuntime
 
 
 FORMAL_PROJECT_ANALYSIS_RESULT = {
@@ -209,10 +210,22 @@ def _failure_category(row: dict[str, Any]) -> str:
     return "unknown"
 
 
+def _contains_in_order(observed: tuple[str, ...], required: tuple[str, ...]) -> bool:
+    """Return whether all required tools appear in order, allowing specialists.
+
+    Multi-Agent evaluation deliberately permits an additional role-isolated
+    knowledge lookup while retaining the frozen project-tool requirements.
+    """
+    iterator = iter(observed)
+    return all(any(actual == expected for actual in iterator) for expected in required)
+
+
 class EvalRunner:
     """Run every case independently through the production AgentRuntime."""
-    def __init__(self, runtime: AgentRuntime, tools: _EvaluationTools, dataset=EVAL_DATASET):
+    def __init__(self, runtime: AgentRuntime, tools: _EvaluationTools, dataset=EVAL_DATASET,
+                 strict_tool_selection: bool = True):
         self.runtime, self.tools, self.dataset = runtime, tools, tuple(dataset)
+        self.strict_tool_selection = strict_tool_selection
 
     def run(self) -> dict[str, Any]:
         observed: list[dict[str, Any]] = []
@@ -233,6 +246,7 @@ class EvalRunner:
             successful = [event for event in trace["tool_calls"] if event["success"]]
             failed = [event for event in trace["tool_calls"] if not event["success"]]
             citations = [source.get("citation") for source in result.sources if source.get("citation")]
+            agent_roles = [item.get("agent_role") for item in trace.get("multi_agent", {}).get("results", []) if item.get("agent_role")]
             factual = case.expected_factual_result is None or result.answer == case.expected_factual_result
             memory_ok = (case.setup_query is None or case.category != "memory" or bool(trace["memory_used"]))
             if case.category == "cross_project": memory_ok = not trace["memory_used"]
@@ -248,7 +262,14 @@ class EvalRunner:
             row = {
                 "case_id": case.case_id, "category": case.category,
                 "routing": trace["intent"] == case.expected_intent,
-                "tool_selection": selected == case.expected_tools,
+                # The frozen Single-Agent suite requires an exact tool plan.
+                # The Multi-Agent companion run keeps the same cases but may
+                # add a role-permitted knowledge lookup; it must still call
+                # every required project tool in the prescribed order.
+                "tool_selection": (
+                    selected == case.expected_tools if self.strict_tool_selection
+                    else _contains_in_order(selected, case.expected_tools)
+                ),
                 "task_success": result.answer.strip() != "" and factual,
                 "grounding": result.grounded == case.expected_grounded, "evidence": evidence_ok,
                 "factual_exact_match": factual if case.expected_factual_result is not None else None,
@@ -259,6 +280,7 @@ class EvalRunner:
                 "latency_ms": round(latency_ms, 3),
                 "llm_latency_ms": sum(float(call.get("latency_ms", 0)) for call in trace["llm_calls"]),
                 "tool_call_count": len(selected), "failed_tool_calls": len(failed),
+                "observed_agent_roles": agent_roles,
             }
             checks = ("routing", "tool_selection", "task_success", "grounding", "evidence", "abstention", "retrieval", "memory", "tool_failure_handling")
             row["passed"] = all(row[name] for name in checks)
@@ -308,6 +330,26 @@ def run_deterministic_evaluation(output_path: Path | None = None) -> dict[str, A
     with tempfile.TemporaryDirectory(prefix="buildingai-eval-") as directory:
         runtime, tools = make_deterministic_runtime(Path(directory) / "evaluation.sqlite3")
         result = EvalRunner(runtime, tools).run()
+    if output_path:
+        write_evaluation_artifacts(result, output_path.parent)
+        if output_path.name != "latest.json":
+            output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    return result
+
+
+def run_deterministic_multi_agent_evaluation(output_path: Path | None = None) -> dict[str, Any]:
+    """Run the frozen regression suite through the optional multi-agent path.
+
+    Cases are intentionally unchanged; this is a comparison, not a new
+    easier dataset.  The artifact records coordination overhead separately.
+    """
+    with tempfile.TemporaryDirectory(prefix="buildingai-multi-eval-") as directory:
+        single, tools = make_deterministic_runtime(Path(directory) / "evaluation.sqlite3")
+        result = EvalRunner(MultiAgentRuntime(single.context), tools,
+                            strict_tool_selection=False).run()
+    result["evaluation_type"] = "deterministic_multi_agent_regression"
+    result["agent_architecture"] = MULTI_AGENT_ARCHITECTURE_VERSION
+    result["metrics"]["Average Agent Calls"] = sum(len(row.get("observed_agent_roles", [])) for row in result["cases"]) / result["case_count"] if result["case_count"] else 0.0
     if output_path:
         write_evaluation_artifacts(result, output_path.parent)
         if output_path.name != "latest.json":

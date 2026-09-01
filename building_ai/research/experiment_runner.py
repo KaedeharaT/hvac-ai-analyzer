@@ -34,6 +34,10 @@ from building_ai.storage.confirmed_mapping_store import ConfirmedMappingStore
 # Import after service modules: the established diagnostics module imports the
 # analytics service for its typed rule inputs.
 from building_ai.core.diagnostics import DiagnosisConfig
+from building_ai.multi_agent_runtime import (
+    COORDINATION_POLICY_VERSION, MAX_REPLAN_ROUNDS, MULTI_AGENT_ARCHITECTURE_VERSION,
+    REVIEW_POLICY_VERSION,
+)
 
 
 RESEARCH_SCHEMA_VERSION = 1
@@ -197,10 +201,16 @@ class ResearchExperimentRunner:
         payload.setdefault("timezone", "unspecified")
         payload.setdefault("diagnosis", {})
         payload.setdefault("finalize", True)
+        payload.setdefault("agent_mode", "single")
+        if payload["agent_mode"] not in {"single", "multi"}:
+            raise ValueError("Research configuration agent_mode must be 'single' or 'multi'")
         return payload
 
     def run(self, config: dict[str, Any], *, experiment_id: str | None = None, allow_dirty: bool = False) -> dict[str, Any]:
         config = dict(config)
+        config.setdefault("agent_mode", "single")
+        if config["agent_mode"] not in {"single", "multi"}:
+            raise ValueError("Research configuration agent_mode must be 'single' or 'multi'")
         source = Path(str(config["dataset_path"])).resolve()
         if not source.is_file():
             raise FileNotFoundError(f"Research dataset does not exist: {source}")
@@ -261,6 +271,12 @@ class ResearchExperimentRunner:
             "git_commit": git["git_commit"], "git_dirty": git["git_dirty"],
             "semantic_algorithm_version": PIPELINE_VERSION, "diagnosis_ruleset_version": DIAGNOSIS_RULESET_VERSION,
             "configuration": config, "random_seed": int(config.get("seed", 0)), "llm": {"provider": settings.provider, "model": settings.model, "temperature": 0, "top_p": None, "max_tokens": None, "seed": int(config.get("seed", 0))},
+            "agent_architecture": {"mode": config["agent_mode"], "version": "single-v1" if config["agent_mode"] == "single" else MULTI_AGENT_ARCHITECTURE_VERSION,
+                "agents": ["CoordinatorAgent", "DataAnalystAgent", "HVACExpertAgent", "KnowledgeAgent", "DrawingAgent", "ReviewerAgent"] if config["agent_mode"] == "multi" else ["AgentRuntime"],
+                "coordination_policy": COORDINATION_POLICY_VERSION if config["agent_mode"] == "multi" else None,
+                "review_policy": REVIEW_POLICY_VERSION if config["agent_mode"] == "multi" else None,
+                "max_rounds": MAX_REPLAN_ROUNDS if config["agent_mode"] == "multi" else 1,
+                "tool_permissions": "read_only"},
             "knowledge_base_version": self._knowledge_version(), "detector_model": config.get("detector_model"), "ground_truth": gt_info,
             "mapping_override": mapping_override,
         }

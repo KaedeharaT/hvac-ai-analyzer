@@ -48,6 +48,7 @@ class Settings:
     direct_prompt_version: str = "direct_v1_name"
     task_queue_backend: str = "local"
     redis_url: str = "redis://localhost:6379/0"
+    agent_mode: str = "single"
 
     def __post_init__(self) -> None:
         self.data_dir = Path(self.data_dir)
@@ -65,6 +66,9 @@ class Settings:
         self.task_queue_backend = self.task_queue_backend.strip().lower()
         if self.task_queue_backend not in {"local", "redis"}:
             raise ValueError("TASK_QUEUE_BACKEND must be 'local' or 'redis'")
+        self.agent_mode = self.agent_mode.strip().lower()
+        if self.agent_mode not in {"single", "multi"}:
+            raise ValueError("AGENT_MODE must be 'single' or 'multi'")
         if self.direct_prompt_version not in DIRECT_PROMPT_VERSIONS:
             raise ValueError(f"Unsupported Direct Prompt version: {self.direct_prompt_version}")
 
@@ -84,6 +88,7 @@ class Settings:
             direct_prompt_version=os.getenv("DIRECT_PROMPT_VERSION", "direct_v1_name"),
             task_queue_backend=os.getenv("BUILDING_AI_TASK_QUEUE", "local"),
             redis_url=os.getenv("BUILDING_AI_REDIS_URL", "redis://localhost:6379/0"),
+            agent_mode=os.getenv("AGENT_MODE", "single"),
         )
 
     @property

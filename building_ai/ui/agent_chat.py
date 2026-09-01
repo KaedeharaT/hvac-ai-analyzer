@@ -146,7 +146,7 @@ class AgentProcessCard(QFrame):
             "intent": trace.get("intent"), "plan": trace.get("plan"), "tool_calls": trace.get("tool_calls", []),
             "evidence_checks": trace.get("evidence_checks"), "reflections": trace.get("reflections"),
             "memory_used": trace.get("memory_used"), "knowledge_sources": trace.get("knowledge_sources"),
-            "llm_calls": trace.get("llm_calls"),
+            "llm_calls": trace.get("llm_calls"), "multi_agent": trace.get("multi_agent"),
         }
         self.technical.setPlainText(json.dumps(technical, ensure_ascii=False, indent=2, default=str))
         self.retranslate_ui()
@@ -156,6 +156,15 @@ class AgentProcessCard(QFrame):
         successful = sum(bool(call.get("success")) for call in calls if call.get("tool") != "search_knowledge")
         self.summary.setText(tr("agent_process_complete", tools=successful, sources=len(sources), seconds=self._elapsed_ms / 1000))
         lines = [f"✓ {self._step_label(call.get('tool', ''))}" if call.get("success") else f"⚠ {tr('agent_partial_data')}" for call in calls]
+        multi = self._trace.get("multi_agent", {})
+        if multi.get("results"):
+            labels = {
+                "data_analyst": "agent_multi_checked_data", "hvac_expert": "agent_multi_checked_hvac",
+                "knowledge": "agent_multi_checked_knowledge", "drawing": "agent_multi_checked_drawing",
+                "reviewer": "agent_multi_reviewed",
+            }
+            lines = [f"✓ {tr(labels[item['agent_role']])}" for item in multi["results"]
+                     if item.get("agent_role") in labels and item.get("status") == "SUCCEEDED"]
         if self._trace.get("reflections"):
             lines.extend((f"⚠ {tr('agent_need_more_evidence')}", f"✓ {tr('agent_evidence_completed')}"))
         if sources:

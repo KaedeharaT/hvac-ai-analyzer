@@ -96,6 +96,18 @@ def test_strict_mode_rejects_dirty_final_and_allows_explicit_draft(tmp_path, mon
     assert draft["status"] == "DRAFT"
 
 
+def test_multi_agent_architecture_is_snapshotted_for_research_comparison(tmp_path, monkeypatch):
+    monkeypatch.setattr("building_ai.research.experiment_runner.git_metadata", clean_git)
+    payload = config(); payload["agent_mode"] = "multi"
+    runner = ResearchExperimentRunner(tmp_path / "experiments")
+    runner.run(payload, experiment_id="EXP-MULTI")
+    snapshot = json.loads((tmp_path / "experiments" / "EXP-MULTI" / "config.json").read_text(encoding="utf-8"))
+    architecture = snapshot["agent_architecture"]
+    assert architecture["mode"] == "multi"
+    assert architecture["version"] == "multi-v1"
+    assert architecture["tool_permissions"] == "read_only"
+
+
 def test_publication_pipeline_exports_vectors_without_requiring_every_kpi(tmp_path, monkeypatch):
     monkeypatch.setattr("building_ai.research.experiment_runner.git_metadata", clean_git)
     runner = ResearchExperimentRunner(tmp_path / "experiments")
