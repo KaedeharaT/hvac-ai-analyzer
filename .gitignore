@@ -25,6 +25,7 @@ analysis_ui_preview.png
 # are reference material rather than BuildingAI product source.
 paper_research/
 paper_research_archive_*/
+research_data/
 analysis_ui_preview.png
 .pytest_cache/
 artifacts/

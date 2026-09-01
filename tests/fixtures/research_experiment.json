@@ -1,0 +1,15 @@
+{
+  "experiment_name": "public-deterministic-smoke",
+  "project_id": "P01",
+  "dataset_path": "ahp_group_smoke.csv",
+  "semantic_backend": "offline",
+  "seed": 0,
+  "timezone": "Asia/Tokyo",
+  "finalize": true,
+  "diagnosis": {
+    "low_cop_threshold": 2.5,
+    "low_delta_t_threshold_c": 3.0,
+    "low_load_threshold": 0.3,
+    "min_samples": 3
+  }
+}

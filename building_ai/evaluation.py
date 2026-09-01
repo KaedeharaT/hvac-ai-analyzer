@@ -202,7 +202,6 @@ def _failure_category(row: dict[str, Any]) -> str:
     if not row["routing"]: return "routing_error"
     if not row["tool_selection"]: return "wrong_tool"
     if not row["grounding"] or not row["evidence"]: return "missing_evidence"
-    if not row["hallucination_safe"]: return "hallucination"
     if not row["abstention"]: return "over_abstention" if row["observed_abstention"] else "missing_evidence"
     if not row["retrieval"]: return "retrieval_miss"
     if not row["memory"]: return "memory_error"
@@ -240,14 +239,20 @@ class EvalRunner:
             evidence_ok = (not case.expected_grounded) or bool(successful) or bool(failed)
             retrieval_ok = (case.expected_knowledge_source is None or any(case.expected_knowledge_source in citation for citation in citations))
             tool_failure_ok = case.tool_mode != "tool_failure" or (bool(failed) and result.abstained)
-            hallucination_safe = factual and (case.expected_abstention or case.expected_grounded or result.answer == "General, non-project HVAC guidance.")
+            # This deterministic fixture can validate an explicitly specified
+            # answer, routes, tool calls, evidence state, and abstention.  It
+            # cannot semantically adjudicate every natural-language claim in
+            # an answer, so it deliberately does *not* publish a
+            # ``Hallucination Rate``.  A passing grounded route is not proof
+            # that arbitrary prose contains no unsupported claim.
             row = {
                 "case_id": case.case_id, "category": case.category,
                 "routing": trace["intent"] == case.expected_intent,
                 "tool_selection": selected == case.expected_tools,
                 "task_success": result.answer.strip() != "" and factual,
                 "grounding": result.grounded == case.expected_grounded, "evidence": evidence_ok,
-                "hallucination_safe": hallucination_safe, "abstention": result.abstained == case.expected_abstention,
+                "factual_exact_match": factual if case.expected_factual_result is not None else None,
+                "abstention": result.abstained == case.expected_abstention,
                 "retrieval": retrieval_ok, "memory": memory_ok, "tool_failure_handling": tool_failure_ok,
                 "observed_intent": trace["intent"], "observed_tools": list(selected),
                 "observed_abstention": result.abstained, "citations": citations, "answer": result.answer,
@@ -255,17 +260,23 @@ class EvalRunner:
                 "llm_latency_ms": sum(float(call.get("latency_ms", 0)) for call in trace["llm_calls"]),
                 "tool_call_count": len(selected), "failed_tool_calls": len(failed),
             }
-            checks = ("routing", "tool_selection", "task_success", "grounding", "evidence", "hallucination_safe", "abstention", "retrieval", "memory", "tool_failure_handling")
+            checks = ("routing", "tool_selection", "task_success", "grounding", "evidence", "abstention", "retrieval", "memory", "tool_failure_handling")
             row["passed"] = all(row[name] for name in checks)
             row["failure_category"] = None if row["passed"] else _failure_category(row)
             observed.append(row)
         total = len(observed)
         rate = lambda predicate: sum(bool(row[predicate]) for row in observed) / total if total else 0.0
         tool_calls, failed_calls = sum(row["tool_call_count"] for row in observed), sum(row["failed_tool_calls"] for row in observed)
+        factual_cases = [row for row in observed if row["factual_exact_match"] is not None]
+        factual_exact_match = (
+            sum(bool(row["factual_exact_match"]) for row in factual_cases) / len(factual_cases)
+            if factual_cases else "N/A"
+        )
         metrics = {
             "Total Cases": total, "Routing Accuracy": rate("routing"), "Tool Selection Accuracy": rate("tool_selection"),
             "Task Success Rate": rate("task_success"), "Grounded Answer Rate": rate("grounding"),
-            "Hallucination Rate": 1.0 - rate("hallucination_safe"), "Abstention Accuracy": rate("abstention"),
+            "Factual Exact-Match Coverage": len(factual_cases) / total if total else 0.0,
+            "Factual Exact-Match Accuracy": factual_exact_match, "Abstention Accuracy": rate("abstention"),
             "Tool Failure Rate": failed_calls / tool_calls if tool_calls else 0.0, "Average Tool Calls": tool_calls / total if total else 0.0,
             "Average Agent Latency": sum(row["latency_ms"] for row in observed) / total if total else 0.0,
             "Average LLM Latency": sum(row["llm_latency_ms"] for row in observed) / total if total else 0.0,
@@ -275,7 +286,7 @@ class EvalRunner:
         return {"evaluation_type": "deterministic_regression", "run_id": str(uuid.uuid4()), "timestamp": datetime.now(timezone.utc).isoformat(), "git_commit": _commit(),
                 "case_count": total, "metrics": metrics, "failed_cases": failures,
                 "failure_analysis": {category: sum(row["failure_category"] == category for row in failures) for category in
-                    ("routing_error", "wrong_tool", "missing_evidence", "hallucination", "over_abstention", "retrieval_miss", "memory_error", "tool_failure")},
+                    ("routing_error", "wrong_tool", "missing_evidence", "over_abstention", "retrieval_miss", "memory_error", "tool_failure")},
                 "cases": observed, "runner_successful": True}
 
 
@@ -287,7 +298,7 @@ def write_evaluation_artifacts(result: dict[str, Any], output_dir: Path) -> None
     failed_lines = "- None" if not failures else "\n".join(f"- {row['case_id']} ({row['failure_category']})" for row in failures)
     (output_dir / "latest.md").write_text(
         "# BuildingAI Deterministic Agent Regression Suite\n\n"
-        "This is an engineering regression suite, not an end-to-end LLM benchmark.\n\n"
+        "This is an engineering regression suite, not an end-to-end LLM benchmark. It does not report a semantic hallucination rate; factual exact-match checks cover only cases with an explicit expected answer.\n\n"
         f"- Evaluation type: {result['evaluation_type']}\n- Run ID: {result['run_id']}\n- Timestamp: {result['timestamp']}\n"
         f"- Commit: {result['git_commit'] or 'unavailable'}\n- Case count: {result['case_count']}\n\n## Metrics\n\n" +
         "\n".join(metric_lines) + "\n\n## Failed cases\n\n" + failed_lines + "\n", encoding="utf-8")

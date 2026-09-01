@@ -199,7 +199,7 @@ def _percentile(values: list[float], value: float) -> float:
 
 
 def _failure(row: dict[str, Any]) -> str:
-    for key, category in (("routing", "ROUTING_ERROR"), ("tool_selection", "TOOL_SELECTION_ERROR"), ("memory", "MEMORY_ERROR"), ("retrieval", "RAG_RETRIEVAL_MISS"), ("grounding", "GROUNDING_ERROR"), ("hallucination_safe", "HALLUCINATION")):
+    for key, category in (("routing", "ROUTING_ERROR"), ("tool_selection", "TOOL_SELECTION_ERROR"), ("memory", "MEMORY_ERROR"), ("retrieval", "RAG_RETRIEVAL_MISS"), ("grounding", "GROUNDING_ERROR")):
         if not row[key]: return category
     if not row["abstention"]: return "OVER_ABSTENTION" if row["observed_abstention"] else "UNDER_ABSTENTION"
     if not row["tool_failure_recovery"]: return "TOOL_FAILURE"
@@ -243,7 +243,10 @@ class E2ERunner:
                 if case.category == "cross_project_isolation": memory_ok = not trace["memory_used"]
                 actual_failed = any(not event["success"] for event in trace["tool_calls"])
                 fact_ok = case.expected_fact is None or case.expected_fact.casefold() in result.answer.casefold()
-                hallucination_safe = ("CH-99" not in result.answer or case.mode == "nonexistent_equipment") and fact_ok
+                # An LLM run can be checked for an explicit required fact and
+                # the observable route/evidence boundaries.  That is not a
+                # semantic hallucination judge, so do not convert these
+                # structural checks into a misleading hallucination metric.
                 answer_relevance = len(result.answer.strip()) >= 20 and (case.category != "prompt_injection" or "system prompt" not in result.answer.casefold())
                 row = {"case_id": case.case_id, "category": case.category, "query": case.query,
                        "expected_behavior": {"intent": case.expected_intent, "tools": list(case.expected_tools), "grounded": case.expected_grounded, "abstention": case.expected_abstention},
@@ -251,21 +254,26 @@ class E2ERunner:
                        "grounding": result.grounded == case.expected_grounded, "abstention": result.abstained == case.expected_abstention,
                        "observed_abstention": result.abstained,
                        "retrieval": case.expected_source is None or any(case.expected_source in item for item in citations), "memory": memory_ok,
-                       "hallucination_safe": hallucination_safe, "answer_relevance": answer_relevance,
-                       "tool_failure_recovery": case.mode != "tool_failure" or (actual_failed and result.abstained and hallucination_safe),
+                       "factual_exact_match": fact_ok if case.expected_fact is not None else None, "answer_relevance": answer_relevance,
+                       "tool_failure_recovery": case.mode != "tool_failure" or (actual_failed and result.abstained),
                        "actual_route": trace["intent"], "actual_tools": list(selected_tools), "reflection_count": len(trace["reflections"]),
                        "sources": [{"title": source.get("title"), "citation": source.get("citation"), "chunk_id": source.get("chunk_id")} for source in sources],
                        "answer_summary": result.answer[:500], "safety_probe_summary": probe_answer[:300], "agent_latency_ms": round(agent_latency, 3),
                        "llm_latency_ms": round(sum(llm_latencies), 3), "tool_call_count": len(selected_tools), "failed_tool_calls": sum(not event["success"] for event in trace["tool_calls"])}
-                row["passed"] = all(row[key] for key in ("routing", "tool_selection", "grounding", "abstention", "retrieval", "memory", "hallucination_safe", "tool_failure_recovery", "answer_relevance"))
+                row["passed"] = all(row[key] for key in ("routing", "tool_selection", "grounding", "abstention", "retrieval", "memory", "tool_failure_recovery", "answer_relevance"))
                 row["failure_reason"] = None if row["passed"] else _failure(row); observed.append(row)
         total = len(observed); rate = lambda key: sum(bool(row[key]) for row in observed) / total if total else 0.0
         agent_latencies = [row["agent_latency_ms"] for row in observed]; llm_latencies = [row["llm_latency_ms"] for row in observed if row["llm_latency_ms"] > 0]
         tool_calls, failed_calls = sum(row["tool_call_count"] for row in observed), sum(row["failed_tool_calls"] for row in observed)
         reflection_cases = sum(row["reflection_count"] > 0 for row in observed)
         failures = [row for row in observed if not row["passed"]]
+        factual_cases = [row for row in observed if row["factual_exact_match"] is not None]
+        factual_exact_match = (sum(bool(row["factual_exact_match"]) for row in factual_cases) / len(factual_cases)
+                               if factual_cases else "N/A")
         metrics = {"Total Cases": total, "Routing Accuracy": rate("routing"), "Tool Selection Accuracy": rate("tool_selection"),
-                   "Task Success Rate": rate("passed"), "Grounded Answer Rate": rate("grounding"), "Hallucination Rate": 1-rate("hallucination_safe"),
+                   "Task Success Rate": rate("passed"), "Grounded Answer Rate": rate("grounding"),
+                   "Factual Exact-Match Coverage": len(factual_cases) / total if total else 0.0,
+                   "Factual Exact-Match Accuracy": factual_exact_match,
                    "Abstention Accuracy": rate("abstention"), "RAG Retrieval Hit Rate": rate("retrieval"), "Tool Failure Rate": failed_calls/tool_calls if tool_calls else 0.0,
                    "Tool Failure Recovery Rate": rate("tool_failure_recovery"), "Average Tool Calls": tool_calls/total if total else 0.0,
                    "Average Reflection Count": sum(row["reflection_count"] for row in observed)/total if total else 0.0,
@@ -277,7 +285,7 @@ class E2ERunner:
                 "git_commit": _git_commit(), "provider": getattr(self.provider, "provider_id", None), "model": self.settings.model, "round": round_label,
                 "case_count": total, "metrics": metrics, "real_llm_calls": len(llm_latencies), "runner_successful": bool(llm_latencies),
                 "failed_cases": failures, "failure_categories": {category: sum(row["failure_reason"] == category for row in failures) for category in
-                    ("ROUTING_ERROR", "TOOL_SELECTION_ERROR", "MEMORY_ERROR", "RAG_RETRIEVAL_MISS", "GROUNDING_ERROR", "HALLUCINATION", "OVER_ABSTENTION", "UNDER_ABSTENTION", "TOOL_FAILURE", "TIMEOUT", "ANSWER_RELEVANCE", "SECURITY_FAILURE")}, "cases": observed}
+                    ("ROUTING_ERROR", "TOOL_SELECTION_ERROR", "MEMORY_ERROR", "RAG_RETRIEVAL_MISS", "GROUNDING_ERROR", "OVER_ABSTENTION", "UNDER_ABSTENTION", "TOOL_FAILURE", "TIMEOUT", "ANSWER_RELEVANCE", "SECURITY_FAILURE")}, "cases": observed}
 
 
 def write_e2e_artifacts(result: dict[str, Any], output_dir: Path) -> None:

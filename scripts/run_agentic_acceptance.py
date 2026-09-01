@@ -33,7 +33,7 @@ RUNTIME_TESTS={
  'Tool Permission':'tests/test_agent_runtime_security.py::test_registry_rejects_write_and_dangerous_tools_before_dispatch',
  'Secret Redaction':'tests/test_agent_runtime_security.py::test_trace_store_redacts_secrets_in_every_persisted_field',
 }
-EVALUATION_METRICS=('Total Cases','Routing Accuracy','Tool Selection Accuracy','Task Success Rate','Grounded Answer Rate','Hallucination Rate','Abstention Accuracy','Tool Failure Rate','Average Tool Calls','Average Agent Latency','Average LLM Latency','RAG Retrieval Hit Rate')
+EVALUATION_METRICS=('Total Cases','Routing Accuracy','Tool Selection Accuracy','Task Success Rate','Grounded Answer Rate','Factual Exact-Match Coverage','Abstention Accuracy','Tool Failure Rate','Average Tool Calls','Average Agent Latency','Average LLM Latency','RAG Retrieval Hit Rate')
 E2E_REQUIRED_CATEGORIES={'general_chat','general_hvac_knowledge','memory','rag','prompt_injection','tool_failure','cross_project_isolation'}
 def verify_evaluation():
  proof=subprocess.run([sys.executable,'scripts/run_agentic_evaluation.py'],cwd=ROOT,capture_output=True,text=True)
