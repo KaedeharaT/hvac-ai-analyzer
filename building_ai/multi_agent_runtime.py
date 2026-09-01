@@ -27,6 +27,18 @@ MULTI_AGENT_ARCHITECTURE_VERSION = "multi-v1"
 COORDINATION_POLICY_VERSION = "coordinator-policy-v1"
 REVIEW_POLICY_VERSION = "review-policy-v1"
 MAX_REPLAN_ROUNDS = 1
+# Specialist roles are deterministic in v1; these versioned policy identifiers
+# still belong in experiment artifacts so a later LLM prompt introduction
+# cannot silently change the meaning of an architecture label.
+AGENT_PROMPT_VERSIONS = {
+    "coordinator": "coordinator-delegation-policy-v1",
+    "data_analyst": "data-evidence-schema-v1",
+    "hvac_expert": "hvac-evidence-boundary-v1",
+    "knowledge": "knowledge-retrieval-boundary-v1",
+    "drawing": "confirmed-drawing-boundary-v1",
+    "reviewer": "reviewer-evidence-policy-v1",
+    "general_responder": "agent-controller-response-v1",
+}
 
 
 class AgentTask(BaseModel):
@@ -104,6 +116,7 @@ class MultiAgentTrace(BaseModel):
     architecture_version: str = MULTI_AGENT_ARCHITECTURE_VERSION
     coordination_policy: str = COORDINATION_POLICY_VERSION
     review_policy: str = REVIEW_POLICY_VERSION
+    prompt_versions: dict[str, str] = Field(default_factory=lambda: dict(AGENT_PROMPT_VERSIONS))
     max_replan_rounds: int = MAX_REPLAN_ROUNDS
     replan_rounds: int = 0
     tasks: list[AgentTask] = Field(default_factory=list)

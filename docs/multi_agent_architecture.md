@@ -49,8 +49,8 @@ behavior. `AGENT_MODE=multi` can be selected in Settings or passed to
 `POST /agent/chat` as `agent_mode: "multi"`; omitted API clients remain on the
 Single-Agent mode.
 
-Multi-agent traces retain parent/child links, role, task, tools, status, and
-latency. Research experiment snapshots record `agent_mode`, architecture
+Multi-agent traces retain parent/child links, role, task, tools, status,
+latency, and versioned deterministic role policies. Research experiment snapshots record `agent_mode`, architecture
 version (`multi-v1`), role list, coordination and review policies, maximum
 review rounds, and read-only tool permissions. The frozen Single-Agent and
 Multi-Agent deterministic regressions therefore use the same 66 cases while

@@ -35,7 +35,7 @@ from building_ai.storage.confirmed_mapping_store import ConfirmedMappingStore
 # analytics service for its typed rule inputs.
 from building_ai.core.diagnostics import DiagnosisConfig
 from building_ai.multi_agent_runtime import (
-    COORDINATION_POLICY_VERSION, MAX_REPLAN_ROUNDS, MULTI_AGENT_ARCHITECTURE_VERSION,
+    AGENT_PROMPT_VERSIONS, COORDINATION_POLICY_VERSION, MAX_REPLAN_ROUNDS, MULTI_AGENT_ARCHITECTURE_VERSION,
     REVIEW_POLICY_VERSION,
 )
 
@@ -276,6 +276,7 @@ class ResearchExperimentRunner:
                 "coordination_policy": COORDINATION_POLICY_VERSION if config["agent_mode"] == "multi" else None,
                 "review_policy": REVIEW_POLICY_VERSION if config["agent_mode"] == "multi" else None,
                 "max_rounds": MAX_REPLAN_ROUNDS if config["agent_mode"] == "multi" else 1,
+                "prompt_versions": dict(AGENT_PROMPT_VERSIONS) if config["agent_mode"] == "multi" else {"agent_runtime": "single-v1"},
                 "tool_permissions": "read_only"},
             "knowledge_base_version": self._knowledge_version(), "detector_model": config.get("detector_model"), "ground_truth": gt_info,
             "mapping_override": mapping_override,

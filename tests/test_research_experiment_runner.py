@@ -105,6 +105,7 @@ def test_multi_agent_architecture_is_snapshotted_for_research_comparison(tmp_pat
     architecture = snapshot["agent_architecture"]
     assert architecture["mode"] == "multi"
     assert architecture["version"] == "multi-v1"
+    assert architecture["prompt_versions"]["reviewer"] == "reviewer-evidence-policy-v1"
     assert architecture["tool_permissions"] == "read_only"
 
 
