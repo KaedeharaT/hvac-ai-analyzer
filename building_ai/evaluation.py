@@ -24,6 +24,9 @@ from building_ai.storage import Database
 from building_ai.multi_agent_runtime import MULTI_AGENT_ARCHITECTURE_VERSION, MultiAgentRuntime
 
 
+MULTI_AGENT_EVALUATION_VERSION = "multi-agent-eval-v1"
+
+
 FORMAL_PROJECT_ANALYSIS_RESULT = {
     "project_id": "evaluation-project-a",
     "equipment_kpis": (
@@ -348,6 +351,7 @@ def run_deterministic_multi_agent_evaluation(output_path: Path | None = None) ->
         result = EvalRunner(MultiAgentRuntime(single.context), tools,
                             strict_tool_selection=False).run()
     result["evaluation_type"] = "deterministic_multi_agent_regression"
+    result["evaluation_version"] = MULTI_AGENT_EVALUATION_VERSION
     result["agent_architecture"] = MULTI_AGENT_ARCHITECTURE_VERSION
     result["metrics"]["Average Agent Calls"] = sum(len(row.get("observed_agent_roles", [])) for row in result["cases"]) / result["case_count"] if result["case_count"] else 0.0
     if output_path:
