@@ -240,7 +240,9 @@ python -m pip install -r requirements-server.txt
 python -m uvicorn building_ai.api.app:app --host 127.0.0.1 --port 8000
 ```
 
-当前 `main` 验证结果：**111 passed**；`v1.2.0` tag 保留其发布时记录的 **110 passed** 验证结果。
+公开 fresh clone 验证结果：**110 passed，1 skipped**。被跳过的研究 fixture
+smoke test 依赖不随仓库发布的私有 fixture，因此跳过属于预期行为；`v1.2.0`
+tag 保留其发布时记录的 **110 passed** 验证结果。
 
 本地完整与不完整项目的实际使用流程、持久化和安全拒答检查，见：[真实使用评估](docs/real_usage_evaluation.md)。
 

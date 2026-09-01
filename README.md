@@ -226,7 +226,10 @@ The command regenerates curated records, multilingual aliases, portable chunks, 
 python -m pytest
 ```
 
-Current `main` verification: **111 passed**. The `v1.2.0` release tag retains its recorded **110 passed** release verification.
+Public fresh-clone verification: **110 passed, 1 skipped**. The skipped
+research-fixture smoke test is intentional because its private fixture is not
+distributed. The `v1.2.0` release tag retains its recorded **110 passed**
+release verification.
 
 ## Project structure
 
