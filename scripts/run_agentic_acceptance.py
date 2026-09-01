@@ -43,14 +43,14 @@ def verify_evaluation():
   payload=json.loads(artifact.read_text(encoding='utf-8')); metrics=payload['metrics']
   valid=(payload.get('evaluation_type') == 'deterministic_regression' and payload.get('runner_successful') is True and isinstance(payload.get('run_id'),str) and bool(payload.get('timestamp')) and isinstance(payload.get('git_commit'),str) and len(payload['git_commit']) == 40 and payload.get('case_count',0)>=60 and all(name in metrics and isinstance(metrics[name],(int,float)) and math.isfinite(metrics[name]) for name in EVALUATION_METRICS))
   if not valid: return {'status':'FAIL','evidence':'evaluation artifact missing successful run, >=60 cases, or calculable core metrics'}
-  return {'status':'PASS','evidence':f"real evaluation artifact: {payload['case_count']} cases, run {payload['run_id']}"}
+  return {'status':'PASS','evidence':f"deterministic regression artifact: {payload['case_count']} fixture cases, run {payload['run_id']}"}
  except (OSError,json.JSONDecodeError,KeyError,TypeError): return {'status':'FAIL','evidence':'evaluation artifact could not be verified'}
 def verify_e2e_smoke():
  artifact=ROOT/'artifacts'/'evaluation'/'e2e'/'latest.json'
  try:
   payload=json.loads(artifact.read_text(encoding='utf-8')); metrics=payload['metrics']; categories={row['category'] for row in payload['cases']}
   valid=(payload.get('evaluation_type') in {'local_llm_end_to_end','local_qwen_end_to_end'} and payload.get('runner_successful') is True and payload.get('provider') in {'local_llm','local_qwen'} and payload.get('case_count',0)>=50 and payload.get('real_llm_calls',0)>0 and float(metrics.get('Average LLM Latency',0))>0 and E2E_REQUIRED_CATEGORIES <= categories)
-  return {'status':'PASS','evidence':f"real local LLM artifact: {payload['case_count']} cases, {payload['real_llm_calls']} calls"} if valid else {'status':'FAIL','evidence':'missing real local LLM E2E evidence, latency, coverage, or artifact'}
+  return {'status':'PASS','evidence':f"local-LLM simulation artifact: {payload['case_count']} fixture cases, {payload['real_llm_calls']} calls"} if valid else {'status':'FAIL','evidence':'missing local-LLM simulation artifact, latency, coverage, or artifact'}
  except (OSError,json.JSONDecodeError,KeyError,TypeError,ValueError): return {'status':'FAIL','evidence':'E2E evaluation artifact could not be verified'}
 def main():
  import importlib
