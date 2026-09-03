@@ -15,7 +15,7 @@ from building_ai.core.equipment_identity import normalize_equipment_id
 from building_ai.models import AnalysisResult
 from building_ai.services.analytics_service import AnalyticsResult
 from building_ai.services.equipment_service import EquipmentOrganization
-from building_ai.services.capability_detector import AnalysisCapabilities, AnalysisCapabilityDetector
+from building_ai.services.capability_detector import AnalysisCapabilities, AnalysisCapabilityDetector, CapabilityStatus
 
 
 @dataclass(slots=True)
@@ -150,6 +150,9 @@ class EnergyAnalysisService:
             power_points=len(power), temperature_points=len(temperatures),
             analytics_available=bool(analytics and analytics.available_kpis), quality=quality,
         )
+        if rule in {"D", "W", "MS"} and power:
+            details.statuses["daily_profile"] = CapabilityStatus(False, "requires_subdaily_resolution")
+            details.statuses["heatmap"] = CapabilityStatus(False, "requires_subdaily_resolution")
         capabilities = details.boolean_flags()
         capabilities.update({legacy: capabilities[current] for legacy, current in self.LEGACY_CAPABILITIES.items()})
         return EnergyAnalysisResult(project_id, scope_timestamps.min().isoformat(), scope_timestamps.max().isoformat(), interval, quality, capabilities,
@@ -299,9 +302,10 @@ class EnergyAnalysisService:
                 name = f"{power[0].equipment_name}: Input power" if equipment_filter and power[0].equipment_name else "Building total power"
                 charts["power_trend"] = {"unit": "kW", "aggregation": rule, "aggregation_operation": "mean", "peak_operation": "raw_max", "series": [{"name": name, "data": self._aggregate(total, rule, "mean")}], "peak_kw": float(total.max()), "peak_time": total.idxmax().isoformat(), "average_kw": float(total.mean())}
                 aggregated_power = total if rule is None else total.resample(rule).mean()
-                profile = aggregated_power.groupby([aggregated_power.index.weekday < 5, aggregated_power.index.strftime("%H:%M")]).mean()
-                charts["daily_load_profile"] = {"unit": "kW", "series": [{"name": "Weekday" if bool(k) else "Weekend", "data": [{"time": t, "value": float(v)} for (_, t), v in profile[profile.index.get_level_values(0) == k].items()]} for k in sorted(profile.index.get_level_values(0).unique(), reverse=True)]}
-                charts["load_heatmap"] = {"unit": "kW", "aggregation": rule, "data": [{"date": key[0].isoformat(), "time": key[1], "value": float(value)} for key, value in aggregated_power.groupby([aggregated_power.index.date, aggregated_power.index.strftime("%H:%M")]).mean().items()]}
+                if rule not in {"D", "W", "MS"}:
+                    profile = aggregated_power.groupby([aggregated_power.index.weekday < 5, aggregated_power.index.strftime("%H:%M")]).mean()
+                    charts["daily_load_profile"] = {"unit": "kW", "aggregation": rule, "aggregation_operation": "mean", "series": [{"name": "Weekday" if bool(k) else "Weekend", "data": [{"time": t, "value": float(v)} for (_, t), v in profile[profile.index.get_level_values(0) == k].items()]} for k in sorted(profile.index.get_level_values(0).unique(), reverse=True)]}
+                    charts["load_heatmap"] = {"unit": "kW", "aggregation": rule, "aggregation_operation": "mean", "data": [{"date": key[0].isoformat(), "time": key[1], "value": float(value)} for key, value in aggregated_power.groupby([aggregated_power.index.date, aggregated_power.index.strftime("%H:%M")]).mean().items()]}
                 comparison = self._period_comparison(all_power or power, comparison_periods)
                 if comparison_periods is not None:
                     if comparison:
@@ -316,8 +320,11 @@ class EnergyAnalysisService:
             if series: charts["temperature_trend"] = {"unit": "mixed/unknown", "aggregation": rule, "aggregation_operation": "mean", "series": series}
             outdoor = next((x for x in temperatures if any(t in x.name.casefold() for t in ("outdoor", "outside", "外気", "外气", "外温"))), None)
             if outdoor and power:
-                total = pd.concat([x.values for x in power], axis=1).sum(axis=1, min_count=1); paired = pd.DataFrame({"temperature": outdoor.values, "power": total}).dropna()
-                if len(paired) >= 3: charts["weather_correlation"] = {"x_unit": outdoor.unit or "unknown", "y_unit": "kW", "data": [{"x": float(row.temperature), "y": float(row.power)} for row in paired.iloc[:2000].itertuples()]}
+                total = pd.concat([x.values for x in power], axis=1).sum(axis=1, min_count=1)
+                outdoor_values = outdoor.values if rule is None else outdoor.values.resample(rule).mean()
+                power_values = total if rule is None else total.resample(rule).mean()
+                paired = pd.DataFrame({"temperature": outdoor_values, "power": power_values}).dropna()
+                if len(paired) >= 3: charts["weather_correlation"] = {"x_unit": outdoor.unit or "unknown", "y_unit": "kW", "aggregation": rule, "aggregation_operation": "mean", "sample_count": int(len(paired)), "data": [{"x": float(row.temperature), "y": float(row.power)} for row in paired.iloc[:2000].itertuples()]}
         if analytics:
             delta = []; cop = []
             for item in analytics.available_kpis:

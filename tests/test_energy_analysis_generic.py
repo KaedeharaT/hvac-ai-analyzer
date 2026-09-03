@@ -168,3 +168,28 @@ def test_every_supported_resolution_changes_the_real_data_bins(aggregation, expe
     assert result.aggregation_rule == expected_rule
     assert len(result.charts["power_trend"]["series"][0]["data"]) == expected_bins
     assert abs(result.summary["total_energy_kwh"] - 2880.0) < 1e-9
+
+
+def test_coarse_resolution_does_not_create_misleading_time_of_day_charts():
+    timestamps = pd.date_range("2025-01-01", periods=3 * 24, freq="h")
+    frame = pd.DataFrame({"timestamp": timestamps, "Power": [10.0] * len(timestamps)})
+    points = [_point("Power", "heat_source_power", "power", "kW", "CH-1")]
+    result = EnergyAnalysisService().analyze(frame, AnalysisResult(points), "coarse", {"time_column": "timestamp"}, aggregation="day")
+    assert "daily_load_profile" not in result.charts
+    assert "load_heatmap" not in result.charts
+    assert result.capability_details["daily_profile"]["reason"] == "requires_subdaily_resolution"
+    assert result.capability_details["heatmap"]["reason"] == "requires_subdaily_resolution"
+
+
+def test_weather_scatter_uses_selected_resolution_for_both_axes():
+    timestamps = pd.date_range("2025-01-01", periods=18, freq="5min")
+    frame = pd.DataFrame({"timestamp": timestamps, "Outdoor": range(18), "Power": range(10, 28)})
+    points = [
+        _point("Outdoor", "other", "temperature", "°C"),
+        _point("Power", "heat_source_power", "power", "kW", "CH-1"),
+    ]
+    result = EnergyAnalysisService().analyze(frame, AnalysisResult(points), "weather", {"time_column": "timestamp"}, aggregation="30min")
+    scatter = result.charts["weather_correlation"]
+    assert scatter["sample_count"] == 3
+    assert scatter["aggregation"] == "30min"
+    assert [row["x"] for row in scatter["data"]] == [2.5, 8.5, 14.5]

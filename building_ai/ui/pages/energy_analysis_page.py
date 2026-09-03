@@ -231,6 +231,7 @@ class EnergyAnalysisPage(QWidget):
             "requires_outdoor_temperature_and_power": "energy_reason_weather",
             "requires_two_or_more_equipment_energy_series": "energy_reason_ranking",
             "duplicate_timestamps_require_resolution": "energy_reason_duplicate_time",
+            "requires_subdaily_resolution": "energy_reason_subdaily",
         }
         return tr(requirements.get(reason, "energy_no_data"))
 
