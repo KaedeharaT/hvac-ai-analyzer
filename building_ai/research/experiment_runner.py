@@ -38,6 +38,7 @@ from building_ai.multi_agent_runtime import (
     AGENT_PROMPT_VERSIONS, COORDINATION_POLICY_VERSION, MAX_REPLAN_ROUNDS, MULTI_AGENT_ARCHITECTURE_VERSION,
     REVIEW_POLICY_VERSION,
 )
+from building_ai.research.protocol import cv_provenance, load_evaluation_freeze, load_gt_freeze, load_split_registry
 
 
 RESEARCH_SCHEMA_VERSION = 1
@@ -189,7 +190,7 @@ class ResearchExperimentRunner:
             raise ValueError("Research configuration must be a JSON object")
         if not payload.get("dataset_path"):
             raise ValueError("Research configuration requires dataset_path")
-        for key in ("dataset_path", "ground_truth_path", "mapping_overrides_path"):
+        for key in ("dataset_path", "ground_truth_path", "mapping_overrides_path", "split_registry_path", "ground_truth_freeze_path", "evaluation_dataset_freeze_path", "cv_model_path", "cv_split_registry_path"):
             value = payload.get(key)
             if value:
                 candidate = Path(value)
@@ -202,6 +203,9 @@ class ResearchExperimentRunner:
         payload.setdefault("diagnosis", {})
         payload.setdefault("finalize", True)
         payload.setdefault("agent_mode", "single")
+        payload.setdefault("research_protocol", "draft")
+        if payload["research_protocol"] not in {"draft", "formal"}:
+            raise ValueError("research_protocol must be 'draft' or 'formal'")
         if payload["agent_mode"] not in {"single", "multi"}:
             raise ValueError("Research configuration agent_mode must be 'single' or 'multi'")
         return payload
@@ -209,8 +213,11 @@ class ResearchExperimentRunner:
     def run(self, config: dict[str, Any], *, experiment_id: str | None = None, allow_dirty: bool = False) -> dict[str, Any]:
         config = dict(config)
         config.setdefault("agent_mode", "single")
+        config.setdefault("research_protocol", "draft")
         if config["agent_mode"] not in {"single", "multi"}:
             raise ValueError("Research configuration agent_mode must be 'single' or 'multi'")
+        if config["research_protocol"] not in {"draft", "formal"}:
+            raise ValueError("research_protocol must be 'draft' or 'formal'")
         source = Path(str(config["dataset_path"])).resolve()
         if not source.is_file():
             raise FileNotFoundError(f"Research dataset does not exist: {source}")
@@ -264,6 +271,13 @@ class ResearchExperimentRunner:
         gt_path = config.get("ground_truth_path")
         ground_truth = pd.read_csv(gt_path) if gt_path else None
         gt_info = None if ground_truth is None else {"path": str(Path(gt_path).resolve()), "sha256": sha256_file(gt_path), "rows": int(len(ground_truth)), "ground_truth_version": f"gt-v{sha256_file(gt_path)[:12]}"}
+        formal = config["research_protocol"] == "formal"
+        if formal and not (config.get("split_registry_path") and config.get("ground_truth_freeze_path") and gt_info):
+            raise ValueError("Formal research runs require split_registry_path, ground_truth_path, and ground_truth_freeze_path")
+        split_info = load_split_registry(config["split_registry_path"], project_id=str(config["project_id"]), dataset_sha256=dataset["sha256"]) if config.get("split_registry_path") else None
+        gt_freeze = load_gt_freeze(config["ground_truth_freeze_path"], ground_truth_sha256=gt_info["sha256"]) if config.get("ground_truth_freeze_path") and gt_info else None
+        evaluation_freeze = load_evaluation_freeze(config["evaluation_dataset_freeze_path"]) if config.get("evaluation_dataset_freeze_path") else None
+        cv_info = cv_provenance(config)
         metrics = _semantic_metrics(semantic_rows, ground_truth)
         snapshot = {
             "research_schema_version": RESEARCH_SCHEMA_VERSION, "experiment_id": identifier, "experiment_name": config["experiment_name"],
@@ -279,7 +293,9 @@ class ResearchExperimentRunner:
                 "prompt_versions": dict(AGENT_PROMPT_VERSIONS) if config["agent_mode"] == "multi" else {"agent_runtime": "single-v1"},
                 "tool_permissions": "read_only"},
             "knowledge_base_version": self._knowledge_version(), "detector_model": config.get("detector_model"), "ground_truth": gt_info,
-            "mapping_override": mapping_override,
+            "mapping_override": mapping_override, "research_protocol": config["research_protocol"],
+            "split_registry": split_info, "ground_truth_freeze": gt_freeze,
+            "evaluation_dataset_freeze": evaluation_freeze, "cv_provenance": cv_info,
         }
         self._write_json(root / "config.json", snapshot)
         self._write_json(root / "dataset_manifest.json", dataset)
@@ -293,7 +309,7 @@ class ResearchExperimentRunner:
         if metrics is not None:
             self._write_json(root / "semantic_metrics.json", metrics)
             pd.DataFrame(metrics["per_class"]).to_csv(root / "semantic_per_class.csv", index=False)
-        summary = {"status": "FINALIZED" if config.get("finalize", True) else "DRAFT", "experiment_id": identifier, "dataset": dataset, "semantic_mapping_version": mapping_version, "metrics": metrics, "energy_summary": energy.summary, "finding_count": len(diagnosis.findings), "warnings": {"semantic": semantics.warnings, "analytics": analytics.skipped, "diagnosis": diagnosis.skipped, "energy": energy.warnings}}
+        summary = {"status": "FINALIZED" if config.get("finalize", True) else "DRAFT", "experiment_id": identifier, "dataset": dataset, "semantic_mapping_version": mapping_version, "metrics": metrics, "energy_summary": energy.summary, "finding_count": len(diagnosis.findings), "protocol": {"mode": config["research_protocol"], "split": split_info, "ground_truth_freeze": gt_freeze, "evaluation_dataset_freeze": evaluation_freeze, "cv_provenance": cv_info}, "warnings": {"semantic": semantics.warnings, "analytics": analytics.skipped, "diagnosis": diagnosis.skipped, "energy": energy.warnings}}
         self._write_json(root / "results.json", summary)
         self._write_json(root / "reproduce.json", {"command": f"python scripts/run_research_experiment.py --config {root / 'config.json'}", "dataset_sha256": dataset["sha256"], "git_commit": git["git_commit"]})
         manifest = self._manifest(root)
