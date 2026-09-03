@@ -33,7 +33,7 @@ def main() -> int:
         axis.set_ylabel(chart.get("unit", "value"))
         if len(series) > 1:
             axis.legend()
-        figure.tight_layout(); figure.savefig(output / f"figure_{name}.pdf"); figure.savefig(output / f"figure_{name}.png", dpi=300); plt.close(figure)
+        figure.tight_layout(); figure.savefig(output / f"figure_{name}.pdf"); figure.savefig(output / f"figure_{name}.svg"); figure.savefig(output / f"figure_{name}.png", dpi=300); plt.close(figure)
     for name in ("semantic_per_class.csv", "kpi_summary.csv"):
         path = root / name
         if path.exists():

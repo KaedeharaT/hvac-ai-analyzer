@@ -38,7 +38,7 @@ def test_experiment_snapshots_provenance_exports_and_is_immutable(tmp_path, monk
     result = runner.run(config(), experiment_id="EXP-ONE")
     root = tmp_path / "experiments" / "EXP-ONE"
     assert result["status"] == "FINALIZED"
-    for name in ("config.json", "dataset_manifest.json", "git.json", "environment.json", "semantic_mapping.csv", "equipment_mapping.csv", "kpi_summary.csv", "kpi_timeseries.csv", "energy_summary.json", "diagnostics.json", "results.json", "manifest.json", "reproduce.json"):
+    for name in ("config.json", "dataset_manifest.json", "git.json", "environment.json", "semantic_mapping.csv", "semantic_mapping.parquet", "equipment_mapping.csv", "equipment_mapping.parquet", "kpi_summary.csv", "kpi_summary.parquet", "kpi_timeseries.csv", "kpi_timeseries.parquet", "energy_summary.json", "diagnostics.json", "results.json", "manifest.json", "reproduce.json"):
         assert (root / name).is_file()
     manifest = json.loads((root / "dataset_manifest.json").read_text(encoding="utf-8"))
     assert manifest["sha256"] == sha256_file(FIXTURE) and manifest["data_revision"].startswith("r-")
@@ -118,3 +118,4 @@ def test_publication_pipeline_exports_vectors_without_requiring_every_kpi(tmp_pa
     result = subprocess.run([sys.executable, str(script), str(root)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert (root / "figures" / "figure_energy_trend.pdf").is_file()
+    assert (root / "figures" / "figure_energy_trend.svg").is_file()

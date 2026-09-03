@@ -301,8 +301,10 @@ class ResearchExperimentRunner:
         self._write_json(root / "dataset_manifest.json", dataset)
         self._write_json(root / "git.json", git)
         self._write_json(root / "environment.json", environment_snapshot())
-        pd.DataFrame(semantic_rows).to_csv(root / "semantic_mapping.csv", index=False)
-        pd.DataFrame([{"equipment_id": item.equipment_id, "equipment_name": item.name, "equipment_type": item.equipment_type.value} for item in equipment.equipment]).to_csv(root / "equipment_mapping.csv", index=False)
+        semantic_frame = pd.DataFrame(semantic_rows)
+        equipment_frame = pd.DataFrame([{"equipment_id": item.equipment_id, "equipment_name": item.name, "equipment_type": item.equipment_type.value} for item in equipment.equipment])
+        semantic_frame.to_csv(root / "semantic_mapping.csv", index=False); semantic_frame.to_parquet(root / "semantic_mapping.parquet", index=False)
+        equipment_frame.to_csv(root / "equipment_mapping.csv", index=False); equipment_frame.to_parquet(root / "equipment_mapping.parquet", index=False)
         self._write_kpis(root, analytics)
         self._write_json(root / "energy_summary.json", energy.to_dict(include_values=True, limit=1_000_000))
         self._write_json(root / "diagnostics.json", {"findings": [x.to_dict() for x in diagnosis.findings], "skipped": diagnosis.skipped})
@@ -342,8 +344,9 @@ class ResearchExperimentRunner:
                 for name, series in values.items():
                     row[name] = None if series is None or pd.isna(series.iloc[index]) else float(series.iloc[index])
                 series_rows.append(row)
-        pd.DataFrame(summary_rows).to_csv(root / "kpi_summary.csv", index=False)
-        pd.DataFrame(series_rows).to_csv(root / "kpi_timeseries.csv", index=False)
+        summary = pd.DataFrame(summary_rows); series = pd.DataFrame(series_rows)
+        summary.to_csv(root / "kpi_summary.csv", index=False); summary.to_parquet(root / "kpi_summary.parquet", index=False)
+        series.to_csv(root / "kpi_timeseries.csv", index=False); series.to_parquet(root / "kpi_timeseries.parquet", index=False)
 
     @staticmethod
     def _manifest(root: Path) -> dict[str, Any]:
