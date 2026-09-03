@@ -84,12 +84,12 @@ def main() -> int:
 
     OUTPUT.mkdir(parents=True, exist_ok=True)
     pages = {
-        "dashboard.png": 0,
-        "energy-analysis.png": 5,
-        "knowledge-base.png": 8,
+        "dashboard.png": "dashboard",
+        "energy-analysis.png": "energy_analysis",
+        "knowledge-base.png": "knowledge_base",
     }
-    for filename, index in pages.items():
-        window.change_page(index)
+    for filename, page_key in pages.items():
+        window.navigate_to(page_key)
         process_events(app)
         if not window.grab().save(str(OUTPUT / filename), "PNG"):
             raise RuntimeError(f"Could not save {filename}")
@@ -98,8 +98,8 @@ def main() -> int:
     # normal bounded runtime (including project tools and knowledge retrieval)
     # but invokes the existing completion presenter synchronously so the
     # screenshot script does not need a user interaction or a worker thread.
-    window.change_page(7)
-    agent_page = window.pages[7]
+    window.navigate_to("agent")
+    agent_page = window.page_by_key["agent"]
     query = "What should I improve first for AHP-3-3?"
     route = AgentRuntime(context).route(query)
     plan = AgentRuntime(context).plan(route, project.project_id)
