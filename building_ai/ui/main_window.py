@@ -16,7 +16,7 @@ from .pages import (
 from .pages.knowledge_page import KnowledgeBasePage
 from .styles import application_stylesheet
 from .theme import SPACING_LG, SPACING_MD, SPACING_SM
-from .components import StatusBadge
+from .components import GlobalContextBar, StatusBadge
 
 
 class MainWindow(QMainWindow):
@@ -25,10 +25,11 @@ class MainWindow(QMainWindow):
     NAVIGATION = (
         ("▦", "dashboard", DashboardPage), ("▣", "projects", ProjectsPage),
         ("⇧", "import_data", DataPage), ("◇", "semantic_mapping", SemanticsPage),
-        ("⌘", "equipment", EquipmentPage), ("▧", "drawing_intelligence", DrawingIntelligencePage), ("▤", "energy_analysis", EnergyAnalysisPage), ("▤", "analysis", AnalyticsPage),
+        ("⌘", "equipment", EquipmentPage), ("▤", "energy_analysis", EnergyAnalysisPage),
+        ("!", "analysis", AnalyticsPage), ("▧", "drawing_intelligence", DrawingIntelligencePage),
         ("✦", "agent", AgentPage), ("◫", "knowledge_base", KnowledgeBasePage), ("⚙", "settings", SettingsPage),
     )
-    NAV_GROUPS = {0: "nav_overview", 1: "nav_data", 6: "nav_analytics", 8: "nav_ai"}
+    NAV_GROUPS = {0: "nav_overview", 1: "nav_data", 4: "nav_engineering", 8: "nav_ai"}
     NAV_ICONS = (QStyle.SP_DesktopIcon, QStyle.SP_DirIcon, QStyle.SP_DialogOpenButton,
                  QStyle.SP_FileDialogDetailedView, QStyle.SP_ComputerIcon, QStyle.SP_FileDialogContentsView, QStyle.SP_FileDialogListView,
                  QStyle.SP_MessageBoxInformation, QStyle.SP_DialogHelpButton, QStyle.SP_DirOpenIcon, QStyle.SP_FileDialogInfoView)
@@ -48,6 +49,7 @@ class MainWindow(QMainWindow):
         shell.addWidget(self._build_sidebar())
         content = QWidget(); content_layout = QVBoxLayout(content); content_layout.setContentsMargins(0, 0, 0, 0); content_layout.setSpacing(0)
         content_layout.addWidget(self._build_topbar())
+        content_layout.addWidget(self._build_contextbar())
         self.stack = QStackedWidget()
         self.pages = [page(self.context) for _, _, page in self.NAVIGATION]
         for page in self.pages:
@@ -56,8 +58,13 @@ class MainWindow(QMainWindow):
         shell.addWidget(content, 1)
         self.setCentralWidget(root)
 
-        self.pages[1].project_changed.connect(self.refresh_pages)
-        self.pages[2].data_changed.connect(self.refresh_pages)
+        self.page_by_key = {key: self.pages[index] for index, (_, key, _) in enumerate(self.NAVIGATION)}
+        self.page_by_key["projects"].project_changed.connect(self.refresh_pages)
+        self.page_by_key["import_data"].data_changed.connect(self.refresh_pages)
+        for page in self.pages:
+            signal = getattr(page, "navigation_requested", None)
+            if signal is not None:
+                signal.connect(self.navigate_to)
         self.navigation_buttons[0].setChecked(True)
         self.change_page(0)
         self.statusBar().showMessage(tr("read_only_notice"))
@@ -93,6 +100,42 @@ class MainWindow(QMainWindow):
         self.language_button = QPushButton(); self.language_button.clicked.connect(self.toggle_language); layout.addWidget(self.language_button)
         return bar
 
+    def _build_contextbar(self) -> GlobalContextBar:
+        self.context_bar = GlobalContextBar()
+        self.context_bar.equipment_changed.connect(self._set_global_equipment)
+        self.context_bar.period_changed.connect(self._set_global_period)
+        self.context_bar.ask_ai.connect(lambda: self.navigate_to("agent", {
+            "equipment_id": self.context.selected_equipment_id,
+            "finding_id": self.context.selected_finding_id,
+        }))
+        return self.context_bar
+
+    def _set_global_equipment(self, equipment_id) -> None:
+        self.context.selected_equipment_id = equipment_id
+        for page in getattr(self, "pages", []):
+            if hasattr(page, "apply_global_context"):
+                page.apply_global_context()
+
+    def _set_global_period(self, period: str) -> None:
+        self.context.selected_period = period
+        for page in getattr(self, "pages", []):
+            if hasattr(page, "apply_global_context"):
+                page.apply_global_context()
+
+    def navigate_to(self, key: str, payload: object = None) -> None:
+        payload = payload if isinstance(payload, dict) else {}
+        if payload.get("equipment_id"):
+            self.context.selected_equipment_id = payload["equipment_id"]
+        if payload.get("finding_id"):
+            self.context.selected_finding_id = payload["finding_id"]
+        target = next((index for index, (_, item_key, _) in enumerate(self.NAVIGATION) if item_key == key), None)
+        if target is None:
+            return
+        self.change_page(target)
+        page = self.pages[target]
+        if key == "agent" and hasattr(page, "set_context_focus"):
+            page.set_context_focus(payload.get("equipment_id"), payload.get("finding_id"), payload.get("prompt"))
+
     def toggle_language(self) -> None:
         target = "zh_CN" if self.i18n.language == "en_US" else "en_US"
         self.i18n.set_language(target)
@@ -110,6 +153,7 @@ class MainWindow(QMainWindow):
         page = self.pages[index]
         if hasattr(page, "refresh"):
             page.refresh()
+        self.context_bar.update_context(self.context)
         self.update_status()
 
     def update_status(self) -> None:
@@ -125,12 +169,14 @@ class MainWindow(QMainWindow):
             ok, _ = provider.test_connection(timeout=0.35)
             detail = tr("connected") if ok else tr("connection_error")
             color = "#16A34A" if ok else "#DC2626"
-        self.llm_label.set_status(f"{provider.display_name} · {detail}", "success" if provider.is_configured and detail == tr("connected") else "warning" if not provider.is_configured else "critical")
+        provider_label = provider.display_name if provider.is_configured else tr("llm")
+        self.llm_label.set_status(f"{provider_label} · {detail}", "success" if provider.is_configured and detail == tr("connected") else "warning" if not provider.is_configured else "critical")
 
     def refresh_pages(self) -> None:
         for page in self.pages:
             if hasattr(page, "refresh"):
                 page.refresh()
+        self.context_bar.update_context(self.context)
         self.update_status()
 
     def retranslate_ui(self) -> None:
@@ -140,12 +186,16 @@ class MainWindow(QMainWindow):
         for label in self.findChildren(QLabel, "SidebarSection"):
             label.setText(tr(label.property("translation_key")))
         for button in self.navigation_buttons:
-            button.setText(tr(button.property('translation_key')))
+            # Ampersands are mnemonic markers in Qt buttons. Escape them so
+            # "Data & Semantics" is displayed literally.
+            button.setText(tr(button.property('translation_key')).replace("&", "&&"))
         index = self.stack.currentIndex() if hasattr(self, "stack") else 0
         self.page_title.setText(tr(self.NAVIGATION[index][1]))
         self.page_subtitle.setText(tr("page_subtitle_" + self.NAVIGATION[index][1]) if "page_subtitle_" + self.NAVIGATION[index][1] in {"page_subtitle_dashboard", "page_subtitle_energy_analysis", "page_subtitle_analysis", "page_subtitle_knowledge_base"} else "")
         for page in getattr(self, "pages", []):
             if hasattr(page, "retranslate_ui"):
                 page.retranslate_ui()
+        if hasattr(self, "context_bar"):
+            self.context_bar.retranslate_ui(); self.context_bar.update_context(self.context)
         self.statusBar().showMessage(tr("read_only_notice"))
         self.update_status()

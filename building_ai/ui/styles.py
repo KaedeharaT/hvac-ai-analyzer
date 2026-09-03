@@ -16,6 +16,9 @@ def application_stylesheet() -> str:
     QLabel#SidebarSection {{ color: #7E8BA0; font-size: 10px; font-weight: 700; letter-spacing: 1px; background: transparent; padding: 11px 12px 3px 12px; }}
     QLabel#SidebarSubtitle {{ color: #8FA0B8; font-size: 11px; background: transparent; padding: 0 12px; }}
     QFrame#Topbar {{ background: {c['surface']}; border-bottom: 1px solid {c['border']}; }}
+    QFrame#ContextBar {{ background: #F8FAFC; border-bottom: 1px solid {c['border']}; }}
+    QLabel#ContextLabel {{ color: {c['muted']}; font-size: {FONT_SMALL}px; font-weight: 650; background: transparent; }}
+    QLabel#ContextValue {{ color: {c['text']}; font-weight: 650; background: transparent; }}
     QFrame#Card {{ background: {c['surface']}; border: 1px solid {c['border']}; border-radius: {RADIUS_LG}px; }}
     QFrame#ChartCard {{ background: {c['surface']}; border: 1px solid {c['border']}; border-radius: {RADIUS_LG}px; }}
     QFrame#EmptyState {{ background: {c['surface']}; border: 1px dashed #CDD6E2; border-radius: {RADIUS_LG}px; min-height: 160px; }}
@@ -42,6 +45,8 @@ def application_stylesheet() -> str:
     QLabel#FeaturedSourceTitle {{ font-size: 14px; font-weight: 650; background: transparent; }}
     QLabel#KnowledgeMeta {{ color: {c['muted']}; font-size: {FONT_SMALL}px; background: transparent; }}
     QFrame#KnowledgeSourceBrowser {{ background: {c['surface']}; border: 1px solid {c['border']}; border-radius: {RADIUS_MD}px; }}
+    QFrame#FindingDetail {{ background: {c['surface']}; border-left: 1px solid {c['border']}; }}
+    QFrame#ReadinessStep {{ background: #F8FAFC; border: 1px solid {c['border']}; border-radius: {RADIUS_SM}px; }}
     QFrame#AgentSetupNotice {{ background: #FFFBEB; border: 1px solid #FDE68A; border-radius: {RADIUS_MD}px; }}
     QFrame#AgentSuggestions {{ background: #F8FAFC; border: 1px solid {c['border']}; border-radius: {RADIUS_MD}px; }}
     QLabel#CardValue {{ font-size: {FONT_METRIC}px; font-weight: 700; background: transparent; }}

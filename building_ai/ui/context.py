@@ -55,6 +55,12 @@ class ApplicationContext:
         self.opportunities = []
         self.user_interpretations = []
         self.cop_status = "Not evaluated"
+        # Presentation-only global scope.  Services continue to receive an
+        # explicit project/equipment/period, so this cannot alter research
+        # artifacts or deterministic calculations implicitly.
+        self.selected_equipment_id: str | None = None
+        self.selected_period: str = "all"
+        self.selected_finding_id: str | None = None
         self.agent_controller = AgentController(self)
 
     def reload_llm(self) -> None:
@@ -74,12 +80,17 @@ class ApplicationContext:
         self.energy_analysis_result = None
         self.opportunities = []
         self.user_interpretations = []
+        self.selected_equipment_id = None
+        self.selected_period = "all"
+        self.selected_finding_id = None
 
     def open_project(self, project_id: str):
         project = self.projects.get(project_id)
         if not project:
             raise KeyError(project_id)
         self.current_project = project
+        self.selected_equipment_id = None
+        self.selected_finding_id = None
         try:
             self.dataframe = self.timeseries.load(project_id)
         except FileNotFoundError:

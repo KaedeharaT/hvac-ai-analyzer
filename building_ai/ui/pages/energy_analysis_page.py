@@ -9,7 +9,7 @@ import pandas as pd
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QFontMetrics, QPainter, QPen
-from PyQt5.QtWidgets import QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QScrollArea, QTabWidget, QVBoxLayout, QWidget
 
 from building_ai.core.equipment_identity import normalize_equipment_id
 from building_ai.i18n import LanguageManager, tr
@@ -39,7 +39,7 @@ class TimeSeriesChart(QWidget):
     on a coloured line to communicate engineering meaning.
     """
     def __init__(self, kind: str = "line"):
-        super().__init__(); self.kind = kind; self.payload = {}; self.setMinimumHeight(235)
+        super().__init__(); self.kind = kind; self.payload = {}; self.setMinimumHeight(285)
 
     def set_payload(self, payload):
         self.payload = payload or {}; self.update()
@@ -212,6 +212,12 @@ class EnergyAnalysisPage(QWidget):
         ("equipment_ranking", "energy_chart_ranking", "bar", "energy_axis_equipment", "energy_axis_energy"),
         ("period_comparison", "energy_chart_period", "bar", "energy_axis_period", "energy_axis_average_power"),
     )
+    GROUPS = (
+        ("energy_group_overview", {"energy_trend", "power_trend"}),
+        ("energy_group_equipment", {"temperature_trend", "delta_t_trend", "cop_trend", "equipment_ranking"}),
+        ("energy_group_temporal", {"daily_load_profile", "load_heatmap"}),
+        ("energy_group_advanced", {"weather_correlation", "period_comparison"}),
+    )
 
     @staticmethod
     def _capability_reason(reason: str) -> str:
@@ -252,7 +258,7 @@ class EnergyAnalysisPage(QWidget):
     def __init__(self, context):
         super().__init__(); self.context = context; self.i18n = LanguageManager.instance(); self.i18n.language_changed.connect(self.retranslate_ui)
         self.layout = QVBoxLayout(self); self.layout.setContentsMargins(SPACING_LG, SPACING_LG, SPACING_LG, SPACING_LG); self.layout.setSpacing(SPACING_MD)
-        self.heading = QLabel(); self.heading.setObjectName("PageTitle"); self.layout.addWidget(self.heading)
+        self.heading = QLabel(); self.heading.setObjectName("PageTitle"); self.heading.hide(); self.layout.addWidget(self.heading)
         controls = QHBoxLayout(); self.range_label = QLabel(); self.range = QComboBox()
         self.equipment_label = QLabel(); self.equipment = QComboBox(); self.aggregation_label = QLabel(); self.aggregation = QComboBox()
         self.chart_label = QLabel(); self.chart_filter = QComboBox()
@@ -263,6 +269,10 @@ class EnergyAnalysisPage(QWidget):
         grid = QGridLayout(); self.cards = {key: MetricCard(title) for key, title in (("energy", "energy_total"), ("peak", "energy_peak"), ("cop", "analysis_cop"), ("dt", "analysis_delta_t"))}
         for i, card in enumerate(self.cards.values()): grid.addWidget(card, 0, i)
         self.layout.addLayout(grid)
+        self.section_tabs = QTabWidget(); self.section_tabs.setMaximumHeight(42)
+        for _ in self.GROUPS: self.section_tabs.addTab(QWidget(), "")
+        self.section_tabs.currentChanged.connect(self.refresh); self.layout.addWidget(self.section_tabs)
+        self.readiness_label = QLabel(); self.readiness_label.setObjectName("Muted"); self.readiness_label.setWordWrap(True); self.layout.addWidget(self.readiness_label)
         self.scroll = QScrollArea(); self.scroll.setWidgetResizable(True); self.scroll.setFrameShape(QFrame.NoFrame)
         self.content = QWidget()
         # Charts are intentionally arranged as a responsive desktop grid.  The
@@ -290,6 +300,7 @@ class EnergyAnalysisPage(QWidget):
             combo.setCurrentIndex(max(0, combo.findData(selected))); combo.blockSignals(False)
         self.range_label.setText(tr("energy_time_range")); self.equipment_label.setText(tr("analysis_equipment_filter")); self.aggregation_label.setText(tr("energy_aggregation")); self.chart_label.setText(tr("energy_metric"))
         for card in self.cards.values(): card.retranslate_ui()
+        for index, (key, _) in enumerate(self.GROUPS): self.section_tabs.setTabText(index, tr(key))
         self.refresh()
 
     def _result(self):
@@ -304,14 +315,16 @@ class EnergyAnalysisPage(QWidget):
     def refresh(self):
         if not hasattr(self, "chart_layout"): return
         self.equipment.blockSignals(True); chosen = self.equipment.currentData(); self.equipment.clear(); self.equipment.addItem(tr("analysis_all_equipment"), None)
-        for item in (self.context.equipment_organization.equipment if self.context.equipment_organization else []): self.equipment.addItem(item.name, normalize_equipment_id(item.name))
+        for item in (self.context.equipment_organization.equipment if self.context.equipment_organization else []): self.equipment.addItem(item.name, normalize_equipment_id(item.name) or item.name)
         self.equipment.setCurrentIndex(max(0, self.equipment.findData(chosen))); self.equipment.blockSignals(False)
         result = self._result()
         while self.chart_grid.count():
             child = self.chart_grid.takeAt(0)
             if child.widget(): child.widget().deleteLater()
         if result is None:
-            self.metadata.setText(tr("energy_no_data")); return
+            self.metadata.setText(tr("energy_no_data")); self.readiness_label.setText(tr("analysis_not_ready"));
+            for card in self.cards.values(): card.set_value("—")
+            return
         q = result.data_quality; self.metadata.setText(tr("energy_metadata", start=result.start or "—", end=result.end or "—", interval=(f"{result.sampling_interval_minutes:g}" if result.sampling_interval_minutes else "—"), equipment=result.summary["equipment_count"], energy=result.summary["energy_points"], temperature=result.summary["temperature_points"], missing=q["missing_ratio"]))
         summary = result.summary
         self.cards["energy"].set_value("—" if summary["total_energy_kwh"] is None else f"{summary['total_energy_kwh']:,.1f} kWh")
@@ -319,9 +332,18 @@ class EnergyAnalysisPage(QWidget):
         self.cards["cop"].set_value("—" if summary["average_cop"] is None else f"{summary['average_cop']:.2f}")
         self.cards["dt"].set_value("—" if summary["average_delta_t_c"] is None else f"{summary['average_delta_t_c']:.2f} °C")
         selected_chart = self.chart_filter.currentData()
+        group_codes = self.GROUPS[self.section_tabs.currentIndex()][1]
+        availability = []
+        for code, title_key, _, _, _ in self.CHARTS:
+            if code not in group_codes: continue
+            detail = result.capability_details.get(self.CHART_CAPABILITIES.get(code, ""), {})
+            state = tr("readiness_complete") if result.charts.get(code) else tr("readiness_unavailable")
+            availability.append(state + ": " + tr(title_key) + ("" if result.charts.get(code) else f" — {self._capability_reason(detail.get('reason', ''))}"))
+        self.readiness_label.setText(tr("energy_readiness") + ":  " + "   |   ".join(availability))
         row, column = 0, 0
         for code, title_key, kind, x_key, y_key in self.CHARTS:
             if selected_chart != "all" and code != selected_chart: continue
+            if selected_chart == "all" and code not in group_codes: continue
             payload = result.charts.get(code)
             if not payload:
                 if selected_chart != "all":
@@ -365,3 +387,13 @@ class EnergyAnalysisPage(QWidget):
             if column:
                 row += 1
             self.chart_grid.addWidget(notice, row, 0, 1, 2)
+
+    def apply_global_context(self):
+        period_index = self.range.findData(self.context.selected_period)
+        if period_index >= 0 and self.range.currentIndex() != period_index:
+            self.range.setCurrentIndex(period_index)
+        equipment = normalize_equipment_id(self.context.selected_equipment_id) or self.context.selected_equipment_id
+        equipment_index = self.equipment.findData(equipment)
+        if equipment_index >= 0 and self.equipment.currentIndex() != equipment_index:
+            self.equipment.setCurrentIndex(equipment_index)
+        self.refresh()

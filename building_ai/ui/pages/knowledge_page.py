@@ -64,7 +64,9 @@ class KnowledgeBasePage(QWidget):
         self.scroll = QScrollArea(); self.scroll.setWidgetResizable(True); self.scroll.setFrameShape(QFrame.NoFrame); outer.addWidget(self.scroll)
         self.content = QWidget(); self.content.setObjectName("KnowledgePage"); self.scroll.setWidget(self.content)
         self.layout = QVBoxLayout(self.content); self.layout.setContentsMargins(SPACING_LG, SPACING_LG, SPACING_LG, SPACING_LG); self.layout.setSpacing(SPACING_LG)
-        self._build_search_hero(); self._build_metrics(); self._build_results(); self._build_knowledge_sections(); self._build_featured_sources(); self._build_source_browser(); self.layout.addStretch(1)
+        # Search and topics are the primary user tasks. Corpus statistics are
+        # deliberately secondary product metadata rather than the hero.
+        self._build_search_hero(); self._build_results(); self._build_knowledge_sections(); self._build_featured_sources(); self._build_metrics(); self._build_source_browser(); self.layout.addStretch(1)
         self.i18n.language_changed.connect(self.retranslate_ui); self.retranslate_ui(); self.refresh()
 
     @staticmethod

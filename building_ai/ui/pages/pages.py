@@ -10,8 +10,8 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QColor, QPainter, QPen
 from PyQt5.QtWidgets import (
     QAbstractItemView, QComboBox, QFileDialog, QFormLayout, QFrame, QGridLayout,
-    QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QMessageBox,
-    QProgressBar, QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QTabWidget, QTextEdit, QTreeWidget,
+    QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget, QMessageBox,
+    QProgressBar, QPushButton, QScrollArea, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QTextEdit, QTreeWidget,
     QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -29,6 +29,7 @@ from building_ai.ui.agent_chat import AgentEvidenceCard, AgentProcessCard, Agent
 from building_ai.ui.pages.energy_analysis_page import EnergyAnalysisPage
 from building_ai.ui.pages.energy_analysis_page import TimeSeriesChart
 from building_ai.ui.components import SectionHeader, StatusBadge
+from building_ai.services.product_experience import AnalysisReportService, finding_evidence_summary, passed_checks
 
 
 LOGGER = logging.getLogger(__name__)
@@ -311,7 +312,10 @@ class BasePage(QWidget):
         self.context = context; self.title_key = title_key
         self.layout = QVBoxLayout(self); self.layout.setContentsMargins(SPACING_LG, SPACING_LG, SPACING_LG, SPACING_LG); self.layout.setSpacing(SPACING_MD)
         self.i18n = LanguageManager.instance(); self.i18n.language_changed.connect(self.retranslate_ui)
-        self.heading = QLabel(); self.heading.setObjectName("PageTitle"); self.layout.addWidget(self.heading)
+        # The persistent application header already carries the page title.
+        # Retain this label for compatibility and translations, but avoid a
+        # second visible title in the page body.
+        self.heading = QLabel(); self.heading.setObjectName("PageTitle"); self.heading.hide(); self.layout.addWidget(self.heading)
         self.heading.setText(tr(self.title_key))
 
     def retranslate_ui(self) -> None:
@@ -325,29 +329,39 @@ class BasePage(QWidget):
 
 
 class DashboardPage(BasePage):
+    navigation_requested = pyqtSignal(str, object)
+
     def __init__(self, context):
         super().__init__(context, "dashboard")
         self.subtitle = QLabel(); self.subtitle.setObjectName("Muted"); self.layout.addWidget(self.subtitle)
+        self.scroll = QScrollArea(); self.scroll.setWidgetResizable(True); self.scroll.setFrameShape(QFrame.NoFrame)
+        self.body = QWidget(); self.body_layout = QVBoxLayout(self.body); self.body_layout.setContentsMargins(0, 0, 0, 0); self.body_layout.setSpacing(SPACING_MD)
+        self.scroll.setWidget(self.body); self.layout.addWidget(self.scroll, 1)
         grid = QGridLayout(); grid.setHorizontalSpacing(SPACING_MD); grid.setVerticalSpacing(SPACING_MD)
-        # The dashboard intentionally promotes operational answers rather than
-        # import/semantic implementation details.  The latter stay accessible
-        # from their dedicated pages and technical details panels.
         self.cards = {
-            "energy": Card("energy_total"), "peak": Card("energy_peak"),
-            "cop": Card("analysis_cop"), "attention": Card("analysis_attention_equipment"),
-            "opportunities": Card("analysis_opportunity_total"),
+            "readiness": Card("analysis_ready"), "equipment": Card("analysis_equipment_total"),
+            "energy": Card("energy_total"), "attention": Card("analysis_attention_equipment"),
         }
         for index, card in enumerate(self.cards.values()):
-            grid.addWidget(card, index // 3, index % 3)
-        self.layout.addLayout(grid)
+            grid.addWidget(card, 0, index)
+        self.body_layout.addLayout(grid)
+        readiness_card = QFrame(); readiness_card.setObjectName("Card"); readiness_box = QVBoxLayout(readiness_card)
+        self.readiness_header = SectionHeader(tr("dashboard_readiness"), ""); readiness_box.addWidget(self.readiness_header)
+        self.readiness_steps = QHBoxLayout(); readiness_box.addLayout(self.readiness_steps); self.body_layout.addWidget(readiness_card)
         trend_card = QFrame(); trend_card.setObjectName("ChartCard"); trend_box = QVBoxLayout(trend_card); trend_box.setContentsMargins(SPACING_MD, SPACING_MD, SPACING_MD, SPACING_MD)
         trend_box.addWidget(SectionHeader(tr("energy_chart_energy"), tr("page_subtitle_energy_analysis")))
         self.energy_chart = TimeSeriesChart("line"); self.energy_chart.setMinimumHeight(245); trend_box.addWidget(self.energy_chart)
-        self.layout.addWidget(trend_card, 2)
         lower = QHBoxLayout(); lower.setSpacing(SPACING_MD)
-        self.equipment_status = QFrame(); self.equipment_status.setObjectName("Card"); self.equipment_status_layout = QVBoxLayout(self.equipment_status); self.equipment_status_layout.addWidget(SectionHeader(tr("equipment"), "")); self.equipment_status_layout.addStretch(1)
-        self.action_summary = QTextEdit(); self.action_summary.setReadOnly(True); self.action_summary.setObjectName("Card"); self.action_summary.setMinimumHeight(150)
-        lower.addWidget(self.equipment_status, 1); lower.addWidget(self.action_summary, 1); self.layout.addLayout(lower, 1)
+        attention = QFrame(); attention.setObjectName("Card"); attention_box = QVBoxLayout(attention); attention_box.addWidget(SectionHeader(tr("dashboard_attention"), ""))
+        self.attention_table = QTableWidget(0, 3); self.setup_table(self.attention_table); self.attention_table.setHorizontalHeaderLabels([tr("equipment"), tr("diagnostics_finding_column"), tr("status")]); self.attention_table.setMaximumHeight(190); self.attention_table.cellDoubleClicked.connect(self._open_finding)
+        self.attention_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.attention_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.attention_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        attention_box.addWidget(self.attention_table)
+        next_card = QFrame(); next_card.setObjectName("Card"); next_box = QVBoxLayout(next_card); next_box.addWidget(SectionHeader(tr("dashboard_next_check"), "")); self.next_check = QLabel(); self.next_check.setWordWrap(True); next_box.addWidget(self.next_check); next_box.addStretch(1)
+        self.ask_button = QPushButton(tr("ask_ai")); self.ask_button.setObjectName("PrimaryButton"); self.ask_button.clicked.connect(lambda: self.navigation_requested.emit("agent", {"prompt": tr("agent_question_findings")})); next_box.addWidget(self.ask_button)
+        lower.addWidget(attention, 2); lower.addWidget(next_card, 1); self.body_layout.addLayout(lower)
+        self.body_layout.addWidget(trend_card)
         self.refresh()
 
     def retranslate_ui(self) -> None:
@@ -363,35 +377,52 @@ class DashboardPage(BasePage):
         counts = {status.value: 0 for status in SemanticStatus}
         if semantics:
             for item in semantics.semantic_results: counts[item.status.value] += 1
-        self.cards["energy"].set_value(f"{energy.summary.get('total_energy_kwh', 0):.1f} kWh" if energy and energy.summary.get("total_energy_kwh") is not None else "—")
-        peak = energy.summary.get("peak_power_kw") if energy else None
-        self.cards["peak"].set_value(f"{peak:.1f} kW" if peak is not None else "—")
-        average_cop = energy.summary.get("average_cop") if energy else None
-        self.cards["cop"].set_value(f"{average_cop:.2f}" if average_cop is not None else "—")
+        imported = self.context.dataframe is not None
+        mapped = bool(semantics and semantics.semantic_results)
+        equipment_count = len(self.context.equipment)
+        analysis_ready = self.context.diagnosis_result is not None
+        self.cards["readiness"].set_value(tr("analysis_ready") if analysis_ready else tr("analysis_not_ready"))
+        self.cards["equipment"].set_value(str(equipment_count))
+        self.cards["energy"].set_value(f"{energy.summary.get('total_energy_kwh', 0):,.1f} kWh" if energy and energy.summary.get("total_energy_kwh") is not None else "—")
         diagnosis = self.context.diagnosis_result
         finding_count = len(diagnosis.findings) if diagnosis else 0
         self.cards["attention"].set_value(str(len({item.equipment_id for item in diagnosis.findings}) if diagnosis else 0))
-        self.cards["opportunities"].set_value(str(len(self.context.opportunities) if self.context.opportunities else finding_count))
         metadata = [project.name if project else tr("no_project"), f"{self.context.import_metadata.get('start', '—')} — {self.context.import_metadata.get('end', '—')}"]
         if semantics:
             metadata.append(f"{len(semantics.semantic_results)} {tr('points')}")
         self.subtitle.setText(" · ".join(metadata))
         chart = energy.charts.get("energy_trend") if energy else None
         self.energy_chart.set_payload(chart or {})
-        while self.equipment_status_layout.count() > 2:
-            child = self.equipment_status_layout.takeAt(1)
+        while self.readiness_steps.count():
+            child = self.readiness_steps.takeAt(0)
             if child.widget(): child.widget().deleteLater()
-        findings = {item.equipment_id for item in (self.context.diagnosis_result.findings if self.context.diagnosis_result else [])}
-        if self.context.equipment_organization:
-            for binding in self.context.equipment_organization.heat_sources:
-                row = QHBoxLayout(); row.addWidget(QLabel(binding.equipment.name)); row.addStretch(1)
-                row.addWidget(StatusBadge(tr("analysis_attention_equipment") if binding.equipment_id in findings else tr("analysis_normal_equipment"), "warning" if binding.equipment_id in findings else "success"))
-                holder = QWidget(); holder.setLayout(row); self.equipment_status_layout.insertWidget(self.equipment_status_layout.count() - 1, holder)
+        statuses = (
+            ("readiness_import", imported), ("readiness_semantics", mapped),
+            ("readiness_review", not bool(counts.get("REVIEW") or counts.get("ABSTAIN"))),
+            ("readiness_equipment", equipment_count > 0), ("readiness_analysis", analysis_ready),
+        )
+        for key, ready in statuses:
+            frame = QFrame(); frame.setObjectName("ReadinessStep"); row = QHBoxLayout(frame); row.setContentsMargins(SPACING_SM, SPACING_SM, SPACING_SM, SPACING_SM)
+            status = QLabel(tr("readiness_complete") if ready else tr("readiness_pending")); status.setObjectName("Muted")
+            row.addWidget(status); row.addWidget(QLabel(tr(key))); self.readiness_steps.addWidget(frame, 1)
+        findings = list(diagnosis.findings if diagnosis else [])
+        names = {item.equipment_id: item.equipment_name for item in diagnosis.analytics.equipment_kpis} if diagnosis and diagnosis.analytics else {}
+        self.attention_table.setRowCount(len(findings))
+        for row, item in enumerate(findings):
+            values = [names.get(item.equipment_id, item.equipment_id or "—"), finding_text(item)[0], tr("finding_severity_" + item.severity)]
+            for column, value in enumerate(values):
+                cell = QTableWidgetItem(value); cell.setData(Qt.UserRole, item.finding_id); self.attention_table.setItem(row, column, cell)
         user_items = getattr(self.context, "user_interpretations", [])
         if user_items:
-            self.action_summary.setText("\n\n".join(f"{item.problem}\n{item.explanation}\n{tr('recommendation_first_action')}{item.actions[0]}" for item in user_items[:2]))
+            item = user_items[0]
+            self.next_check.setText(f"{item.problem}\n\n{tr('recommendation_first_action')}{item.actions[0]}\n\n{tr('diagnostics_verification')}: {item.expected_effect}")
         else:
-            self.action_summary.setText(tr("analysis_no_findings"))
+            self.next_check.setText(tr("dashboard_no_active") + "\n\n" + tr("dashboard_not_health_claim"))
+
+    def _open_finding(self, row: int, column: int) -> None:
+        item = self.attention_table.item(row, 0)
+        if item:
+            self.navigation_requested.emit("analysis", {"finding_id": item.data(Qt.UserRole), "equipment_id": item.text()})
 
 
 class ProjectsPage(BasePage):
@@ -461,6 +492,7 @@ class DataPage(BasePage):
         self.import_button.clicked.connect(lambda: self.import_file("add")); self.replace_button.clicked.connect(lambda: self.import_file("replace")); self.clear_button.clicked.connect(self.clear_data)
         for button in (self.import_button, self.replace_button, self.clear_button): buttons.addWidget(button)
         buttons.addStretch(1); self.layout.addLayout(buttons)
+        self.readiness = QLabel(); self.readiness.setObjectName("Muted"); self.readiness.setWordWrap(True); self.layout.addWidget(self.readiness)
         self.metadata = QTextEdit(); self.metadata.setReadOnly(True); self.metadata.setObjectName("Card"); self.metadata.setMaximumHeight(125); self.layout.addWidget(self.metadata)
         self.preview = QTableWidget(); self.setup_table(self.preview); self.layout.addWidget(self.preview, 1); self.retranslate_ui()
 
@@ -501,9 +533,9 @@ class DataPage(BasePage):
         if not hasattr(self, "metadata"): return
         project = self.context.current_project
         if not project:
-            self.metadata.setText(tr("no_project_message")); return
+            self.metadata.setText(tr("no_project_message")); self.readiness.setText("○ " + tr("readiness_import")); return
         if self.context.dataframe is None:
-            self.metadata.setText(tr(self.context.data_notice or "no_project_data")); self.preview.setRowCount(0); self.preview.setColumnCount(0); return
+            self.metadata.setText(tr(self.context.data_notice or "no_project_data")); self.readiness.setText("○ " + tr("readiness_import")); self.preview.setRowCount(0); self.preview.setColumnCount(0); return
         info = self.context.import_metadata
         latest = (info.get("imports") or [{}])[-1]
         summary = [
@@ -514,6 +546,9 @@ class DataPage(BasePage):
             f"{tr('import_last_updated')}: {latest.get('imported_at') or '—'} · {tr('import_revision')}: {project.data_revision}",
         ]
         self.metadata.setPlainText("\n".join(summary))
+        semantics = self.context.semantic_result.semantic_results if self.context.semantic_result else []
+        mapped = sum(item.status.value == "ACCEPT" for item in semantics); review = sum(item.status.value == "REVIEW" for item in semantics); abstained = sum(item.status.value == "ABSTAIN" for item in semantics)
+        self.readiness.setText(f"✓ {tr('readiness_import')}  →  {'✓' if semantics else '○'} {tr('readiness_semantics')} ({mapped} {tr('mapped')} · {review} {tr('review')} · {abstained} {tr('abstained')})  →  {'✓' if self.context.equipment else '○'} {tr('readiness_equipment')}")
         frame = self.context.dataframe.head(50); self.preview.setRowCount(len(frame)); self.preview.setColumnCount(len(frame.columns)); self.preview.setHorizontalHeaderLabels([str(c) for c in frame.columns])
         for row in range(len(frame)):
             for col in range(len(frame.columns)):
@@ -524,6 +559,7 @@ class SemanticsPage(BasePage):
     def __init__(self, context):
         super().__init__(context, "semantic_mapping")
         self.run_button = QPushButton(); self.run_button.setObjectName("PrimaryButton"); self.run_button.clicked.connect(self.run_analysis); self.layout.addWidget(self.run_button, alignment=Qt.AlignLeft)
+        self.summary = QLabel(); self.summary.setObjectName("Muted"); self.layout.addWidget(self.summary)
         self.table = QTableWidget(0, 10); self.setup_table(self.table); self.table.itemSelectionChanged.connect(self.show_details); self.layout.addWidget(self.table, 1)
         review = QHBoxLayout(); self.label = QComboBox(); self.label.addItems(TAXONOMY); self.equipment_id = QLineEdit(); self.note = QLineEdit(); self.accept = QPushButton(); self.accept.setObjectName("PrimaryButton"); self.unknown = QPushButton()
         self.accept.clicked.connect(self.save_review); self.unknown.clicked.connect(self.mark_unknown)
@@ -542,6 +578,9 @@ class SemanticsPage(BasePage):
     def refresh(self):
         if not hasattr(self, "table"): return
         items = self.context.semantic_result.semantic_results if self.context.semantic_result else []; self.table.setRowCount(len(items))
+        counts = {"ACCEPT": 0, "REVIEW": 0, "ABSTAIN": 0}
+        for item in items: counts[item.status.value] = counts.get(item.status.value, 0) + 1
+        self.summary.setText(f"{len(items)} {tr('points')} · {counts['ACCEPT']} {tr('mapped')} · {counts['REVIEW']} {tr('review')} · {counts['ABSTAIN']} {tr('abstained')} · {len(self.context.equipment)} {tr('equipment')}")
         for row, item in enumerate(items):
             source = item.confirmation_source or item.debug_metadata.get("llm_prior", {}).get("source", "engineering_offline")
             values = [item.raw_name, item.effective_label, item.equipment_type or "", item.effective_equipment_id or "", item.physical_quantity or "", item.unit or "", "" if item.confidence is None else f"{item.confidence:.2f}", "valid" if item.physical_validity else "check", item.review_status, source]
@@ -563,22 +602,96 @@ class SemanticsPage(BasePage):
 
 
 class EquipmentPage(BasePage):
+    navigation_requested = pyqtSignal(str, object)
+
     def __init__(self, context):
         super().__init__(context, "equipment")
-        self.tree = QTreeWidget(); self.tree.setAlternatingRowColors(True); self.layout.addWidget(self.tree, 1); self.retranslate_ui()
+        self.splitter = QSplitter(); self.layout.addWidget(self.splitter, 1)
+        self.table = QTableWidget(0, 4); self.setup_table(self.table); self.table.itemSelectionChanged.connect(self._render_detail); self.splitter.addWidget(self.table)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        detail = QFrame(); detail.setObjectName("FindingDetail"); box = QVBoxLayout(detail)
+        self.detail_title = QLabel(tr("equipment_select")); self.detail_title.setObjectName("SectionTitle"); box.addWidget(self.detail_title)
+        self.detail_meta = QLabel(); self.detail_meta.setObjectName("Muted"); self.detail_meta.setWordWrap(True); box.addWidget(self.detail_meta)
+        buttons = QHBoxLayout(); self.energy_button = QPushButton(); self.ai_button = QPushButton(); self.ai_button.setObjectName("PrimaryButton"); self.drawing_button = QPushButton()
+        self.energy_button.clicked.connect(lambda: self._navigate("energy_analysis")); self.ai_button.clicked.connect(lambda: self._navigate("agent")); self.drawing_button.clicked.connect(lambda: self._navigate("drawing_intelligence"))
+        for button in (self.energy_button, self.ai_button, self.drawing_button): buttons.addWidget(button)
+        buttons.addStretch(1); box.addLayout(buttons)
+        self.tabs = QTabWidget(); self.detail_views = {}
+        for key in ("equipment_overview", "equipment_performance", "equipment_diagnostics", "equipment_signals", "equipment_drawing", "equipment_ai_insight"):
+            view = QTextEdit(); view.setReadOnly(True); self.detail_views[key] = view; self.tabs.addTab(view, "")
+        box.addWidget(self.tabs, 1); self.splitter.addWidget(detail); self.splitter.setSizes([460, 650]); self.retranslate_ui(); self.refresh()
 
     def retranslate_ui(self):
         super().retranslate_ui()
-        if hasattr(self, "tree"): self.tree.setHeaderLabels([tr("equipment_name"), tr("canonical_label"), tr("unit")])
+        if hasattr(self, "table"):
+            self.table.setHorizontalHeaderLabels([tr("equipment_name"), tr("device_type"), tr("equipment_analysis_coverage_short"), tr("equipment_finding_count_short")])
+            for index, key in enumerate(self.detail_views): self.tabs.setTabText(index, tr(key))
+            self.energy_button.setText(tr("equipment_open_energy")); self.ai_button.setText(tr("equipment_ask_ai")); self.drawing_button.setText(tr("equipment_view_drawing"))
 
     def refresh(self):
-        if not hasattr(self, "tree"): return
-        self.tree.clear(); root = QTreeWidgetItem(["Building"]); self.tree.addTopLevelItem(root)
-        for equipment in self.context.equipment:
-            node = QTreeWidgetItem([equipment.name, equipment.equipment_type.value]); root.addChild(node)
-            for item in (self.context.semantic_result.semantic_results if self.context.semantic_result else []):
-                if equipment.name == "Unknown" or equipment.name.lower() in item.raw_name.lower(): node.addChild(QTreeWidgetItem([item.raw_name, item.effective_label, item.unit or ""]))
-        root.setExpanded(True)
+        if not hasattr(self, "table"): return
+        selected = self.context.selected_equipment_id
+        diagnosis = self.context.diagnosis_result
+        kpis = diagnosis.analytics.equipment_kpis if diagnosis and diagnosis.analytics else []
+        findings = diagnosis.findings if diagnosis else []
+        self.table.setRowCount(len(self.context.equipment))
+        for row, equipment in enumerate(self.context.equipment):
+            kpi = next((item for item in kpis if item.equipment_id == equipment.equipment_id or item.equipment_name == equipment.name), None)
+            count = sum(item.equipment_id == equipment.equipment_id for item in findings)
+            values = [equipment.name, equipment.equipment_type.value, tr("analysis_available") if kpi and kpi.status == "available" else tr("analysis_skipped"), str(count)]
+            for column, value in enumerate(values):
+                cell = QTableWidgetItem(value); cell.setData(Qt.UserRole, equipment.name); self.table.setItem(row, column, cell)
+            if equipment.name == selected: self.table.selectRow(row)
+        if self.table.rowCount() and self.table.currentRow() < 0: self.table.selectRow(0)
+        if self.table.rowCount():
+            # Rebuilding a QTableWidget can preserve a selected row without
+            # emitting itemSelectionChanged. Render explicitly so cross-page
+            # equipment context never leaves a stale detail panel.
+            self._render_detail()
+        if not self.table.rowCount():
+            self.detail_title.setText(tr("equipment_select"));
+            for view in self.detail_views.values(): view.setPlainText(tr("run_semantics_first"))
+
+    def apply_global_context(self):
+        self.refresh()
+
+    def _selected_equipment(self):
+        row = self.table.currentRow(); name = self.table.item(row, 0).data(Qt.UserRole) if row >= 0 and self.table.item(row, 0) else None
+        return next((item for item in self.context.equipment if item.name == name), None)
+
+    def _render_detail(self):
+        equipment = self._selected_equipment()
+        if not equipment: return
+        self.context.selected_equipment_id = equipment.name
+        diagnosis = self.context.diagnosis_result; kpis = diagnosis.analytics.equipment_kpis if diagnosis and diagnosis.analytics else []
+        kpi = next((item for item in kpis if item.equipment_id == equipment.equipment_id or item.equipment_name == equipment.name), None)
+        findings = [item for item in (diagnosis.findings if diagnosis else []) if item.equipment_id == equipment.equipment_id]
+        checks = [item for item in passed_checks(diagnosis) if item.equipment_id == equipment.equipment_id]
+        locations = self.context.drawings.equipment_location(self.context.current_project.project_id, equipment.equipment_id) if self.context.current_project else []
+        self.detail_title.setText(equipment.name)
+        self.detail_meta.setText(f"{equipment.equipment_type.value} · {tr('equipment_analysis_coverage')}: {tr('analysis_available') if kpi and kpi.status == 'available' else tr('analysis_skipped')} · {tr('equipment_finding_count')}: {len(findings)}")
+        self.detail_views["equipment_overview"].setPlainText((tr("equipment_no_finding") + "\n" + tr("equipment_no_finding_note")) if not findings else "\n".join(f"• {finding_text(item)[0]}" for item in findings))
+        metrics = kpi.metric_summary if kpi else {}
+        metric_lines = []
+        for label, key, unit in (("Power", "power_kw", "kW"), ("COP", "cop", ""), ("ΔT", "delta_t_c", "°C"), ("Thermal load", "thermal_load_kw", "kW")):
+            value = metrics.get(key, {}).get("mean"); metric_lines.append(f"{label}: {'N/A' if value is None else f'{value:,.2f} {unit}'.strip()}")
+        self.detail_views["equipment_performance"].setPlainText("\n".join(metric_lines) + (f"\n\n{tr('analysis_reason')}: {reason_text(kpi.reason)}" if kpi and kpi.status != "available" else ""))
+        finding_lines = [f"{finding_text(item)[0]}\n{finding_evidence_summary(item)}" for item in findings]
+        if checks: finding_lines.extend([f"✓ {item.title}\n{tr('diagnostics_passed_note')}" for item in checks])
+        self.detail_views["equipment_diagnostics"].setPlainText("\n\n".join(finding_lines) or tr("analysis_no_findings"))
+        binding = next((item for item in (self.context.equipment_organization.heat_sources if self.context.equipment_organization else []) if item.equipment_id == equipment.equipment_id), None)
+        self.detail_views["equipment_signals"].setPlainText("\n".join(f"{role}: {point.raw_name} [{point.unit or '—'}]" for role, point in (binding.points_by_role.items() if binding else [])) or tr("analysis_missing_signals", fields="—"))
+        self.detail_views["equipment_drawing"].setPlainText("\n".join(tr("equipment_drawing_record", file=item['file_name'], page=item['page_number'], object_class=item['reviewed_class'] or item['class_name']) for item in locations) or tr("agent_drawing_no_reliable_mapping"))
+        self.detail_views["equipment_ai_insight"].setPlainText(tr("equipment_ask_ai") + "\n\n" + tr("agent_question_findings") + "\n" + tr("agent_question_cop"))
+
+    def _navigate(self, key: str):
+        equipment = self._selected_equipment()
+        if equipment:
+            prompt = tr("equipment_investigation_prompt", equipment=equipment.name) if key == "agent" else None
+            self.navigation_requested.emit(key, {"equipment_id": equipment.name, "prompt": prompt})
 
 
 class LegacyEnergyAnalysisPage(BasePage):
@@ -654,6 +767,8 @@ class LegacyEnergyAnalysisPage(BasePage):
 
 
 class AnalyticsPage(BasePage):
+    navigation_requested = pyqtSignal(str, object)
+
     def __init__(self, context):
         super().__init__(context, "analysis")
         self._analysis_worker = None
@@ -662,6 +777,9 @@ class AnalyticsPage(BasePage):
         controls.addStretch(1)
         self.filter_label = QLabel(); self.filter_label.setObjectName("Muted"); controls.addWidget(self.filter_label)
         self.equipment_filter = QComboBox(); self.equipment_filter.currentIndexChanged.connect(self.refresh); controls.addWidget(self.equipment_filter)
+        self.severity_filter = QComboBox(); self.severity_filter.currentIndexChanged.connect(self.refresh); controls.addWidget(self.severity_filter)
+        self.type_filter = QComboBox(); self.type_filter.currentIndexChanged.connect(self.refresh); controls.addWidget(self.type_filter)
+        self.export_md = QPushButton(); self.export_html = QPushButton(); self.export_md.clicked.connect(lambda: self.export_report("md")); self.export_html.clicked.connect(lambda: self.export_report("html")); controls.addWidget(self.export_md); controls.addWidget(self.export_html)
         self.layout.addLayout(controls)
         self.progress_panel = AnalysisProgressPanel(); self.progress_panel.hide(); self.layout.addWidget(self.progress_panel)
         self.empty_state = QLabel(); self.empty_state.setObjectName("Muted"); self.empty_state.setAlignment(Qt.AlignCenter); self.empty_state.setWordWrap(True); self.empty_state.setMinimumHeight(160); self.layout.addWidget(self.empty_state)
@@ -685,7 +803,10 @@ class AnalyticsPage(BasePage):
         overview_layout.addLayout(charts); overview_layout.addStretch(1)
         self.tabs.addTab(self.overview, "")
         self.kpi_scroll, self.kpi_content, self.kpi_layout = self._scroll_tab(); self.tabs.addTab(self.kpi_scroll, "")
-        self.findings_scroll, self.findings_content, self.findings_layout = self._scroll_tab(); self.tabs.addTab(self.findings_scroll, "")
+        self.findings_page = QWidget(); findings_box = QVBoxLayout(self.findings_page); findings_box.setContentsMargins(0, 0, 0, 0)
+        finding_split = QSplitter(); self.finding_table = QTableWidget(0, 5); self.setup_table(self.finding_table); self.finding_table.itemSelectionChanged.connect(self._show_finding_detail); finding_split.addWidget(self.finding_table)
+        detail_frame = QFrame(); detail_frame.setObjectName("FindingDetail"); detail_box = QVBoxLayout(detail_frame); self.finding_detail = QTextEdit(); self.finding_detail.setReadOnly(True); detail_box.addWidget(self.finding_detail); self.finding_ask_ai = QPushButton(); self.finding_ask_ai.setObjectName("PrimaryButton"); self.finding_ask_ai.clicked.connect(self._ask_about_finding); detail_box.addWidget(self.finding_ask_ai); finding_split.addWidget(detail_frame); finding_split.setSizes([560, 480]); findings_box.addWidget(finding_split); self.tabs.addTab(self.findings_page, "")
+        self.passed_scroll, self.passed_content, self.passed_layout = self._scroll_tab(); self.tabs.addTab(self.passed_scroll, "")
         self.opportunities_scroll, self.opportunities_content, self.opportunities_layout = self._scroll_tab(); self.tabs.addTab(self.opportunities_scroll, "")
         self.retranslate_ui()
 
@@ -738,7 +859,12 @@ class AnalyticsPage(BasePage):
         if hasattr(self, "run_button"):
             self.run_button.setText(tr("analysis_running_button") if self._analysis_worker else tr("run_analysis"))
             self.filter_label.setText(tr("analysis_equipment_filter"))
-            self.tabs.setTabText(0, tr("analysis_overview")); self.tabs.setTabText(1, tr("analysis_kpi")); self.tabs.setTabText(2, tr("analysis_findings")); self.tabs.setTabText(3, tr("analysis_opportunities"))
+            severity = self.severity_filter.currentData(); self.severity_filter.blockSignals(True); self.severity_filter.clear(); self.severity_filter.addItem(tr("diagnostics_all_severity"), None)
+            for value in ("critical", "warning", "info"): self.severity_filter.addItem(tr("finding_severity_" + value), value)
+            self.severity_filter.setCurrentIndex(max(0, self.severity_filter.findData(severity))); self.severity_filter.blockSignals(False)
+            self.type_filter.setToolTip(tr("diagnostics_finding_type")); self.export_md.setText(tr("diagnostics_export_markdown")); self.export_html.setText(tr("diagnostics_export_html")); self.finding_ask_ai.setText(tr("equipment_ask_ai"))
+            self.finding_table.setHorizontalHeaderLabels([tr("equipment"), tr("diagnostics_finding_column"), tr("status"), tr("analysis_period"), tr("analysis_evidence")])
+            self.tabs.setTabText(0, tr("analysis_overview")); self.tabs.setTabText(1, tr("analysis_kpi")); self.tabs.setTabText(2, tr("analysis_findings")); self.tabs.setTabText(3, tr("diagnostics_passed_checks")); self.tabs.setTabText(4, tr("analysis_opportunities"))
             for card in self.summary_cards.values(): card.retranslate_ui()
             for title in self.findChildren(QLabel):
                 if title.property("title_key"): title.setText(tr(title.property("title_key")))
@@ -787,6 +913,14 @@ class AnalyticsPage(BasePage):
         selected = self._selected_name(); kpis = [item for item in all_kpis if not selected or item.equipment_name == selected]
         names = {item.equipment_id: item.equipment_name for item in all_kpis}
         findings = [item for item in diagnosis.findings if not selected or names.get(item.equipment_id) == selected]
+        severity = self.severity_filter.currentData()
+        if severity: findings = [item for item in findings if item.severity == severity]
+        current_type = self.type_filter.currentData()
+        available_types = sorted({item.finding_type for item in diagnosis.findings})
+        self.type_filter.blockSignals(True); self.type_filter.clear(); self.type_filter.addItem(tr("diagnostics_all_types"), None)
+        for item in available_types: self.type_filter.addItem(tr("finding_" + item + "_title"), item)
+        self.type_filter.setCurrentIndex(max(0, self.type_filter.findData(current_type))); self.type_filter.blockSignals(False)
+        if current_type: findings = [item for item in findings if item.finding_type == current_type]
         opportunities = [item for item in self.context.opportunities if not selected or names.get(item.equipment_id) == selected]
         high = sum(item.confidence >= .8 for item in findings)
         self.summary_cards["equipment"].set_value(str(len(kpis)), tr("analysis_equipment_total"))
@@ -802,6 +936,7 @@ class AnalyticsPage(BasePage):
         self.finding_chart.set_data(list(finding_counts.items()))
         self._render_kpis(kpis, findings, names)
         self._render_findings(findings, names)
+        self._render_passed_checks(diagnosis, selected)
         self._render_opportunities(opportunities, names)
         self.context.cop_status = "Diagnosed" if diagnosis.analytics.available_kpis else "Unavailable"
 
@@ -833,25 +968,70 @@ class AnalyticsPage(BasePage):
         if not kpis: self.kpi_layout.insertWidget(0, QLabel(tr("analysis_no_kpi")))
 
     def _render_findings(self, findings, names):
-        self._clear_cards(self.findings_layout)
-        if not findings:
-            self.findings_layout.insertWidget(0, QLabel(tr("analysis_no_findings"))); return
-        interpretations = {item.finding_id: item for item in getattr(self.context, "user_interpretations", [])}
-        for item in findings:
-            user = interpretations.get(item.finding_id)
-            title, description = (user.problem, user.explanation) if user else finding_text(item)
-            card, box = self._card(f"{names.get(item.equipment_id, item.equipment_id or '—')} · {title}")
-            if user:
-                meta = QLabel(f"{tr('analysis_priority')}: {user.priority} · {tr('recommendation_effect')}: {user.expected_effect}"); meta.setObjectName("Muted"); meta.setWordWrap(True); box.addWidget(meta)
-                body = QLabel(description); body.setWordWrap(True); box.addWidget(body)
-                actions = QLabel(tr("recommendation_actions") + "\n" + "\n".join(f"{index + 1}. {action}" for index, action in enumerate(user.actions))); actions.setWordWrap(True); box.addWidget(actions)
-                details = QTextEdit(); details.setReadOnly(True); details.setPlainText(user.technical_details); details.setVisible(False); details.setMaximumHeight(155)
-                toggle = QPushButton(tr("view_technical_details")); toggle.clicked.connect(lambda checked=False, target=details, button=toggle: (target.setVisible(not target.isVisible()), button.setText(tr("hide_technical_details") if target.isVisible() else tr("view_technical_details"))))
-                box.addWidget(toggle); box.addWidget(details)
-            else:
-                meta = QLabel(f"{tr('finding_severity_' + item.severity)} · {tr('analysis_confidence')}: {self._confidence(item.confidence)}"); meta.setObjectName("Muted"); box.addWidget(meta)
-                body = QLabel(description); body.setWordWrap(True); box.addWidget(body)
-            self.findings_layout.insertWidget(self.findings_layout.count() - 1, card)
+        self._current_findings = list(findings); self._finding_names = names
+        self.finding_table.setRowCount(len(findings))
+        for row, item in enumerate(findings):
+            period = item.affected_period or {}
+            values = [names.get(item.equipment_id, item.equipment_id or "—"), finding_text(item)[0], tr("finding_severity_" + item.severity), f"{period.get('start') or '—'} — {period.get('end') or '—'}", finding_evidence_summary(item)]
+            for column, value in enumerate(values):
+                cell = QTableWidgetItem(value); cell.setData(Qt.UserRole, item.finding_id); self.finding_table.setItem(row, column, cell)
+        target = self.context.selected_finding_id
+        target_row = next((row for row, item in enumerate(findings) if item.finding_id == target), 0)
+        if findings: self.finding_table.selectRow(target_row)
+        else: self.finding_detail.setPlainText(tr("analysis_no_findings") + "\n\n" + tr("dashboard_not_health_claim"))
+
+    def _show_finding_detail(self):
+        row = self.finding_table.currentRow()
+        if not 0 <= row < len(getattr(self, "_current_findings", [])): return
+        item = self._current_findings[row]; self.context.selected_finding_id = item.finding_id
+        user = next((value for value in getattr(self.context, "user_interpretations", []) if value.finding_id == item.finding_id), None)
+        title, description = (user.problem, user.explanation) if user else finding_text(item)
+        actions = "\n".join(f"  {index + 1}. {action}" for index, action in enumerate(user.actions)) if user else tr("analysis_no_opportunities")
+        possible = tr("finding_" + item.finding_type + "_causes")
+        if possible == "finding_" + item.finding_type + "_causes": possible = user.explanation if user else tr("analysis_possible_causes") + ": N/A"
+        verification = user.expected_effect if user else "Re-run the same KPI and rule after site inspection."
+        text = (
+            f"{title}\n\n{tr('diagnostics_what_happened')}\n{description}\n\n"
+            f"{tr('diagnostics_project_evidence')}\n{finding_evidence_summary(item)}\n\n"
+            f"{tr('diagnostics_why')}\n{possible}\n\n{tr('diagnostics_inspect')}\n{actions}\n\n"
+            f"{tr('diagnostics_energy_impact')}\n{tr('diagnostics_energy_impact_unavailable')}\n\n"
+            f"{tr('diagnostics_supporting_trends')}\n{', '.join(item.source_metrics) or 'N/A'}\n\n"
+            f"{tr('diagnostics_verification')}\n{verification}\n\n{tr('diagnostics_reference')}\n{tr('knowledge_base')}"
+        )
+        self.finding_detail.setPlainText(text)
+
+    def _render_passed_checks(self, diagnosis, selected):
+        self._clear_cards(self.passed_layout)
+        rows = [item for item in passed_checks(diagnosis) if not selected or item.equipment_name == selected]
+        for item in rows:
+            card, box = self._card(f"✓ {item.equipment_name} · {item.title}")
+            note = QLabel(tr("diagnostics_passed_note")); note.setObjectName("Muted"); note.setWordWrap(True); box.addWidget(note)
+            self.passed_layout.insertWidget(self.passed_layout.count() - 1, card)
+        if not rows: self.passed_layout.insertWidget(0, QLabel(tr("analysis_no_kpi")))
+
+    def _ask_about_finding(self):
+        row = self.finding_table.currentRow()
+        if not 0 <= row < len(getattr(self, "_current_findings", [])): return
+        item = self._current_findings[row]; equipment = self._finding_names.get(item.equipment_id, item.equipment_id)
+        self.navigation_requested.emit("agent", {"equipment_id": equipment, "finding_id": item.finding_id, "prompt": f"Why does {equipment} have this finding, what project evidence supports it, and what should I inspect first?"})
+
+    def export_report(self, extension: str):
+        if not self.context.current_project or not self.context.energy_analysis_result or not self.context.diagnosis_result:
+            QMessageBox.warning(self, tr("analysis_unavailable"), tr("analysis_ready_state")); return
+        path, _ = QFileDialog.getSaveFileName(self, tr("diagnostics_export_markdown" if extension == "md" else "diagnostics_export_html"), f"buildingai-analysis.{extension}", "Markdown (*.md)" if extension == "md" else "HTML (*.html)")
+        if not path: return
+        try:
+            body = AnalysisReportService.markdown(self.context.current_project, self.context.energy_analysis_result, self.context.diagnosis_result, self.context.opportunities) if extension == "md" else AnalysisReportService.html(self.context.current_project, self.context.energy_analysis_result, self.context.diagnosis_result, self.context.opportunities)
+            with open(path, "w", encoding="utf-8") as handle: handle.write(body)
+        except OSError:
+            QMessageBox.warning(self, tr("report_failed"), tr("report_failed")); return
+        QMessageBox.information(self, tr("report_saved"), tr("report_saved"))
+
+    def apply_global_context(self):
+        if hasattr(self, "equipment_filter"):
+            index = self.equipment_filter.findData(self.context.selected_equipment_id)
+            if index >= 0: self.equipment_filter.setCurrentIndex(index)
+        self.refresh()
 
     def _render_opportunities(self, opportunities, names):
         self._clear_cards(self.opportunities_layout)
@@ -863,9 +1043,9 @@ class AnalyticsPage(BasePage):
             title, description = (user.problem, user.explanation) if user else opportunity_text(item)
             card, box = self._card(f"{names.get(item.equipment_id, item.equipment_id or '—')} · {title}")
             if user:
-                meta = QLabel(f"{tr('analysis_priority')}: {user.priority} · {tr('recommendation_difficulty')}: {user.implementation_difficulty} · {tr('recommendation_cost')}: {user.cost_level}"); meta.setObjectName("Muted"); box.addWidget(meta)
-                body = QLabel(tr("recommendation_first_action") + user.actions[0]); body.setWordWrap(True); box.addWidget(body)
-                impact = QLabel(f"{tr('recommendation_effect')}: {user.expected_effect}"); impact.setObjectName("Muted"); impact.setWordWrap(True); box.addWidget(impact)
+                meta = QLabel(f"{tr('analysis_priority')}: {user.priority} · {tr('recommendation_difficulty')}: {user.implementation_difficulty}"); meta.setObjectName("Muted"); box.addWidget(meta)
+                body = QLabel(tr("diagnostics_inspect") + "\n" + "\n".join(f"{index + 1}. {action}" for index, action in enumerate(user.actions))); body.setWordWrap(True); box.addWidget(body)
+                impact = QLabel(f"{tr('recommendation_effect')}: {user.expected_effect}\n{tr('diagnostics_verification')}: {tr('recommendation_verify_kpi')}\n{tr('diagnostics_energy_impact')}: {tr('diagnostics_energy_impact_unavailable')}"); impact.setObjectName("Muted"); impact.setWordWrap(True); box.addWidget(impact)
             else:
                 meta = QLabel(f"{tr('analysis_priority')}: {opportunity_priority_text(item)} · {tr('analysis_confidence')}: {self._confidence(item.confidence)}"); meta.setObjectName("Muted"); box.addWidget(meta)
                 body = QLabel(description); body.setWordWrap(True); box.addWidget(body)
@@ -1022,6 +1202,22 @@ class AgentPage(BasePage):
         if self.input.isEnabled():
             self.input.setPlainText(tr(text_key)); self.input.setFocus()
 
+    def set_context_focus(self, equipment: str | None = None, finding_id: str | None = None, prompt: str | None = None) -> None:
+        """Receive bounded page context without copying another page's data."""
+        self.refresh()
+        project = self.context.current_project
+        if project and equipment:
+            MemoryStore(self.context.database).put(
+                project.project_id, self._conversation_id, "focus", "equipment",
+                {"equipment_id": equipment, "source": "ui_context"},
+            )
+        self.context.selected_equipment_id = equipment or self.context.selected_equipment_id
+        self.context.selected_finding_id = finding_id or self.context.selected_finding_id
+        self._set_focus(equipment)
+        if prompt:
+            self.input.setPlainText(prompt)
+            if self.input.isEnabled(): self.input.setFocus()
+
     def append_user_message(self, text: str) -> ChatMessage:
         self._user_message_count += 1
         if hasattr(self, "suggestions"):
@@ -1119,13 +1315,13 @@ class AgentPage(BasePage):
         tools = {item.get('tool') for item in trace.get('tool_calls', [])}
         actions = []
         window = self.window()
-        if getattr(self, '_focus', None): actions.append((tr('equipment'), 4))
-        if {'get_diagnostic_findings', 'get_analysis_results'} & tools: actions.append((tr('analysis'), 6))
-        if {'get_energy_summary', 'get_energy_timeseries'} & tools: actions.append((tr('energy_analysis'), 5))
-        if not actions or not hasattr(window, 'change_page'): return
+        if getattr(self, '_focus', None): actions.append((tr('equipment'), "equipment"))
+        if {'get_diagnostic_findings', 'get_analysis_results'} & tools: actions.append((tr('analysis'), "analysis"))
+        if {'get_energy_summary', 'get_energy_timeseries'} & tools: actions.append((tr('energy_analysis'), "energy_analysis"))
+        if not actions or not hasattr(window, 'navigate_to'): return
         row = QHBoxLayout(); row.setSpacing(SPACING_SM)
-        for label, page_index in actions[:3]:
-            button = QPushButton(label); button.setObjectName('TextButton'); button.clicked.connect(lambda checked=False, index=page_index: window.change_page(index)); row.addWidget(button)
+        for label, page_key in actions[:3]:
+            button = QPushButton(label); button.setObjectName('TextButton'); button.clicked.connect(lambda checked=False, key=page_key: window.navigate_to(key, {"equipment_id": getattr(self, '_focus', None)})); row.addWidget(button)
         row.addStretch(1); holder = QFrame(); holder.setLayout(row); self.transcript.append(holder)
 
     def _agent_completed(self, response) -> None:
