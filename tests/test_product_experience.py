@@ -92,6 +92,20 @@ def test_diagnostics_workbench_exposes_passed_checks_and_filters(qapp, tmp_path)
     window.close()
 
 
+def test_finding_detail_uses_measured_supporting_trend(qapp, tmp_path):
+    context = product_context(tmp_path)
+    context.dataframe["CH-1 Return °C"] = [8.1] * 8
+    context.dataframe["CH-1 Flow m3/h"] = [18.0] * 8
+    context.dataframe["CH-1 Power kW"] = [42.0] * 8
+    context.run_diagnosis()
+    assert context.diagnosis_result.findings
+    window = MainWindow(context); page = window.page_by_key["analysis"]
+    page.tabs.setCurrentIndex(2); page.finding_table.selectRow(0); page._show_finding_detail()
+    assert page.finding_trend.payload.get("series")
+    assert "Measured project trend" in page.finding_detail.toPlainText()
+    window.close()
+
+
 def test_english_interpretations_do_not_leak_chinese_actions(tmp_path):
     context = product_context(tmp_path)
     assert context.user_interpretations

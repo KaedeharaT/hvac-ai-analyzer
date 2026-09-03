@@ -27,7 +27,7 @@ from building_ai.ui.theme import SPACING_XS, SPACING_LG, SPACING_MD, SPACING_SM
 from building_ai.ui.analysis_renderer import finding_text, opportunity_impact_text, opportunity_priority_text, opportunity_text, reason_text
 from building_ai.ui.agent_chat import AgentEvidenceCard, AgentProcessCard, AgentSourcesCard, ChatInput, ChatMessage, ChatTranscript, ToolCallWidget
 from building_ai.ui.pages.energy_analysis_page import EnergyAnalysisPage
-from building_ai.ui.pages.energy_analysis_page import TimeSeriesChart
+from building_ai.ui.pages.energy_analysis_page import TimeSeriesChart as EngineeringTimeSeriesChart
 from building_ai.ui.components import SectionHeader, StatusBadge
 from building_ai.services.product_experience import AnalysisReportService, finding_evidence_summary, passed_checks
 
@@ -350,7 +350,7 @@ class DashboardPage(BasePage):
         self.readiness_steps = QHBoxLayout(); readiness_box.addLayout(self.readiness_steps); self.body_layout.addWidget(readiness_card)
         trend_card = QFrame(); trend_card.setObjectName("ChartCard"); trend_box = QVBoxLayout(trend_card); trend_box.setContentsMargins(SPACING_MD, SPACING_MD, SPACING_MD, SPACING_MD)
         trend_box.addWidget(SectionHeader(tr("energy_chart_energy"), tr("page_subtitle_energy_analysis")))
-        self.energy_chart = TimeSeriesChart("line"); self.energy_chart.setMinimumHeight(245); trend_box.addWidget(self.energy_chart)
+        self.energy_chart = EngineeringTimeSeriesChart("line"); self.energy_chart.setMinimumHeight(285); trend_box.addWidget(self.energy_chart)
         lower = QHBoxLayout(); lower.setSpacing(SPACING_MD)
         attention = QFrame(); attention.setObjectName("Card"); attention_box = QVBoxLayout(attention); attention_box.addWidget(SectionHeader(tr("dashboard_attention"), ""))
         self.attention_table = QTableWidget(0, 3); self.setup_table(self.attention_table); self.attention_table.setHorizontalHeaderLabels([tr("equipment"), tr("diagnostics_finding_column"), tr("status")]); self.attention_table.setMaximumHeight(190); self.attention_table.cellDoubleClicked.connect(self._open_finding)
@@ -391,8 +391,10 @@ class DashboardPage(BasePage):
         if semantics:
             metadata.append(f"{len(semantics.semantic_results)} {tr('points')}")
         self.subtitle.setText(" · ".join(metadata))
-        chart = energy.charts.get("energy_trend") if energy else None
-        self.energy_chart.set_payload(chart or {})
+        chart = dict(energy.charts.get("energy_trend") or {}) if energy else {}
+        if chart:
+            chart["x_label"] = tr("energy_axis_time"); chart["y_label"] = tr("energy_axis_interval_energy")
+        self.energy_chart.set_payload(chart)
         while self.readiness_steps.count():
             child = self.readiness_steps.takeAt(0)
             if child.widget(): child.widget().deleteLater()
@@ -805,7 +807,9 @@ class AnalyticsPage(BasePage):
         self.kpi_scroll, self.kpi_content, self.kpi_layout = self._scroll_tab(); self.tabs.addTab(self.kpi_scroll, "")
         self.findings_page = QWidget(); findings_box = QVBoxLayout(self.findings_page); findings_box.setContentsMargins(0, 0, 0, 0)
         finding_split = QSplitter(); self.finding_table = QTableWidget(0, 5); self.setup_table(self.finding_table); self.finding_table.itemSelectionChanged.connect(self._show_finding_detail); finding_split.addWidget(self.finding_table)
-        detail_frame = QFrame(); detail_frame.setObjectName("FindingDetail"); detail_box = QVBoxLayout(detail_frame); self.finding_detail = QTextEdit(); self.finding_detail.setReadOnly(True); detail_box.addWidget(self.finding_detail); self.finding_ask_ai = QPushButton(); self.finding_ask_ai.setObjectName("PrimaryButton"); self.finding_ask_ai.clicked.connect(self._ask_about_finding); detail_box.addWidget(self.finding_ask_ai); finding_split.addWidget(detail_frame); finding_split.setSizes([560, 480]); findings_box.addWidget(finding_split); self.tabs.addTab(self.findings_page, "")
+        detail_frame = QFrame(); detail_frame.setObjectName("FindingDetail"); detail_box = QVBoxLayout(detail_frame); self.finding_detail = QTextEdit(); self.finding_detail.setReadOnly(True); detail_box.addWidget(self.finding_detail, 1)
+        self.finding_trend = EngineeringTimeSeriesChart("line"); self.finding_trend.setMinimumHeight(250); self.finding_trend.setVisible(False); detail_box.addWidget(self.finding_trend)
+        self.finding_ask_ai = QPushButton(); self.finding_ask_ai.setObjectName("PrimaryButton"); self.finding_ask_ai.clicked.connect(self._ask_about_finding); detail_box.addWidget(self.finding_ask_ai); finding_split.addWidget(detail_frame); finding_split.setSizes([560, 480]); findings_box.addWidget(finding_split); self.tabs.addTab(self.findings_page, "")
         self.passed_scroll, self.passed_content, self.passed_layout = self._scroll_tab(); self.tabs.addTab(self.passed_scroll, "")
         self.opportunities_scroll, self.opportunities_content, self.opportunities_layout = self._scroll_tab(); self.tabs.addTab(self.opportunities_scroll, "")
         self.retranslate_ui()
@@ -990,15 +994,41 @@ class AnalyticsPage(BasePage):
         possible = tr("finding_" + item.finding_type + "_causes")
         if possible == "finding_" + item.finding_type + "_causes": possible = user.explanation if user else tr("analysis_possible_causes") + ": N/A"
         verification = user.expected_effect if user else "Re-run the same KPI and rule after site inspection."
+        trend_payload = self._finding_trend_payload(item, self._finding_names.get(item.equipment_id, item.equipment_id))
+        self.finding_trend.set_payload(trend_payload); self.finding_trend.setVisible(bool(trend_payload))
+        supporting = tr("diagnostics_measured_trend") if trend_payload else tr("energy_no_data")
         text = (
             f"{title}\n\n{tr('diagnostics_what_happened')}\n{description}\n\n"
             f"{tr('diagnostics_project_evidence')}\n{finding_evidence_summary(item)}\n\n"
             f"{tr('diagnostics_why')}\n{possible}\n\n{tr('diagnostics_inspect')}\n{actions}\n\n"
             f"{tr('diagnostics_energy_impact')}\n{tr('diagnostics_energy_impact_unavailable')}\n\n"
-            f"{tr('diagnostics_supporting_trends')}\n{', '.join(item.source_metrics) or 'N/A'}\n\n"
+            f"{tr('diagnostics_supporting_trends')}\n{supporting}\n{', '.join(item.source_metrics) or 'N/A'}\n\n"
             f"{tr('diagnostics_verification')}\n{verification}\n\n{tr('diagnostics_reference')}\n{tr('knowledge_base')}"
         )
         self.finding_detail.setPlainText(text)
+
+    def _finding_trend_payload(self, finding, equipment_name: str | None) -> dict:
+        result = self.context.energy_analysis_result
+        if not result:
+            return {}
+        chart_code, y_key = {
+            "low_heat_source_cop": ("cop_trend", "energy_axis_cop"),
+            "low_chilled_water_delta_t": ("delta_t_trend", "energy_axis_delta_t"),
+            "off_hour_operation": ("power_trend", "energy_axis_power"),
+            "low_load_high_power": ("power_trend", "energy_axis_power"),
+            "frequent_start_stop": ("power_trend", "energy_axis_power"),
+            "parallel_heat_source_operation": ("power_trend", "energy_axis_power"),
+        }.get(finding.finding_type, ("", ""))
+        payload = dict(result.charts.get(chart_code) or {})
+        if not payload:
+            return {}
+        series = list(payload.get("series", []))
+        selected = [item for item in series if equipment_name and str(item.get("name", "")).startswith(equipment_name)]
+        if selected:
+            payload["series"] = selected
+        payload["x_label"] = tr("energy_axis_time")
+        payload["y_label"] = tr(y_key)
+        return payload
 
     def _render_passed_checks(self, diagnosis, selected):
         self._clear_cards(self.passed_layout)
