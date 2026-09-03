@@ -994,9 +994,19 @@ class AnalyticsPage(BasePage):
         possible = tr("finding_" + item.finding_type + "_causes")
         if possible == "finding_" + item.finding_type + "_causes": possible = user.explanation if user else tr("analysis_possible_causes") + ": N/A"
         verification = user.expected_effect if user else "Re-run the same KPI and rule after site inspection."
-        trend_payload = self._finding_trend_payload(item, self._finding_names.get(item.equipment_id, item.equipment_id))
+        equipment_name = self._finding_names.get(item.equipment_id, item.equipment_id)
+        trend_payload = self._finding_trend_payload(item, equipment_name)
         self.finding_trend.set_payload(trend_payload); self.finding_trend.setVisible(bool(trend_payload))
-        supporting = tr("diagnostics_measured_trend") if trend_payload else tr("energy_no_data")
+        result = getattr(self.context, "energy_analysis_view_result", None) or self.context.energy_analysis_result
+        if trend_payload and result:
+            supporting = tr("diagnostics_measured_trend") + "\n" + tr(
+                "energy_chart_scope", start=EngineeringTimeSeriesChart._scope_time(result.start),
+                end=EngineeringTimeSeriesChart._scope_time(result.end),
+                resolution=EnergyAnalysisPage._resolution_label(result),
+                equipment=equipment_name or tr("analysis_all_equipment"),
+            )
+        else:
+            supporting = tr("energy_no_data")
         text = (
             f"{title}\n\n{tr('diagnostics_what_happened')}\n{description}\n\n"
             f"{tr('diagnostics_project_evidence')}\n{finding_evidence_summary(item)}\n\n"
@@ -1008,7 +1018,7 @@ class AnalyticsPage(BasePage):
         self.finding_detail.setPlainText(text)
 
     def _finding_trend_payload(self, finding, equipment_name: str | None) -> dict:
-        result = self.context.energy_analysis_result
+        result = getattr(self.context, "energy_analysis_view_result", None) or self.context.energy_analysis_result
         if not result:
             return {}
         chart_code, y_key = {
@@ -1026,6 +1036,10 @@ class AnalyticsPage(BasePage):
         selected = [item for item in series if equipment_name and str(item.get("name", "")).startswith(equipment_name)]
         if selected:
             payload["series"] = selected
+        elif equipment_name and series:
+            # A building-total or different-equipment trend is not valid
+            # supporting evidence for this equipment-specific finding.
+            return {}
         payload["x_label"] = tr("energy_axis_time")
         payload["y_label"] = tr(y_key)
         return payload

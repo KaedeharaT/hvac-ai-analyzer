@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import pandas as pd
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QDateTime, Qt
 from PyQt5.QtGui import QColor, QFontMetrics, QPainter, QPen
-from PyQt5.QtWidgets import QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QScrollArea, QTabWidget, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QCheckBox, QComboBox, QDateTimeEdit, QFrame, QGridLayout, QLabel, QScrollArea, QTabWidget, QVBoxLayout, QWidget
 
 from building_ai.core.equipment_identity import normalize_equipment_id
 from building_ai.i18n import LanguageManager, tr
@@ -88,7 +88,7 @@ class TimeSeriesChart(QWidget):
     @staticmethod
     def _scope_time(value: str | None) -> str:
         try:
-            return pd.Timestamp(value).strftime("%Y-%m-%d")
+            return pd.Timestamp(value).strftime("%Y-%m-%d %H:%M")
         except (TypeError, ValueError):
             return value or "—"
 
@@ -105,6 +105,7 @@ class TimeSeriesChart(QWidget):
             "Building total energy": "energy_legend_total_energy",
             "Building total power": "energy_legend_total_power",
             "Weekday": "energy_legend_weekday", "Weekend": "energy_legend_weekend",
+            "Period A": "energy_period_a_short", "Period B": "energy_period_b_short",
         }
         for source, key in translations.items():
             if value == source: return tr(key)
@@ -145,7 +146,7 @@ class TimeSeriesChart(QWidget):
         for index, item in enumerate(data):
             center = plot.left() + int((index + .5) * plot.width() / len(data)); height = int(item["value"] / high * plot.height())
             painter.fillRect(center - width // 2, plot.bottom() - height, width, height, QColor("#2563EB" if index == 0 else "#0F766E"))
-            painter.setPen(QPen(QColor("#334155"))); painter.drawText(center - 44, plot.bottom() + 3, 88, 16, Qt.AlignHCenter, item["name"])
+            painter.setPen(QPen(QColor("#334155"))); painter.drawText(center - 44, plot.bottom() + 3, 88, 16, Qt.AlignHCenter, self._legend_label(item["name"]))
             painter.drawText(center - 44, plot.bottom() - height - 18, 88, 16, Qt.AlignHCenter, self._number(item["value"], self.payload.get("unit", "")))
 
     def _draw_scatter(self, painter: QPainter, plot) -> None:
@@ -252,19 +253,57 @@ class EnergyAnalysisPage(QWidget):
             "negative_power": "energy_warning_negative_power",
             "impossible_temperature": "energy_warning_temperature_range",
             "outlier_values": "energy_warning_outliers",
+            "cumulative_meter_differenced": "energy_warning_cumulative_meter",
+            "cumulative_meter_reset_excluded": "energy_warning_cumulative_reset",
         }
         return tr(keys.get(code, "energy_warning_generic"))
 
+    @staticmethod
+    def _resolution_label(result) -> str:
+        if result.aggregation != "auto":
+            return tr({
+                "raw": "energy_aggregation_raw", "5min": "energy_aggregation_5min",
+                "15min": "energy_aggregation_15min", "30min": "energy_aggregation_30min",
+                "hour": "energy_aggregation_hour", "day": "energy_aggregation_day",
+                "week": "energy_aggregation_week", "month": "energy_aggregation_month",
+            }.get(result.aggregation, "energy_aggregation_auto"))
+        automatic = {
+            "5min": tr("energy_aggregation_5min"), "15min": tr("energy_aggregation_15min"),
+            "30min": tr("energy_aggregation_30min"), "h": tr("energy_aggregation_hour"),
+            "D": tr("energy_aggregation_day"), "W": tr("energy_aggregation_week"),
+            "MS": tr("energy_aggregation_month"), None: tr("energy_aggregation_raw"),
+        }.get(result.aggregation_rule, str(result.aggregation_rule or "—"))
+        return tr("energy_auto_resolution", resolution=automatic)
+
     def __init__(self, context):
         super().__init__(); self.context = context; self.i18n = LanguageManager.instance(); self.i18n.language_changed.connect(self.retranslate_ui)
+        self._scope_project_id = None
+        self._updating_scope = False
+        self._scope_error = None
         self.layout = QVBoxLayout(self); self.layout.setContentsMargins(SPACING_LG, SPACING_LG, SPACING_LG, SPACING_LG); self.layout.setSpacing(SPACING_MD)
         self.heading = QLabel(); self.heading.setObjectName("PageTitle"); self.heading.hide(); self.layout.addWidget(self.heading)
-        controls = QHBoxLayout(); self.range_label = QLabel(); self.range = QComboBox()
+        controls = QGridLayout(); self.range_label = QLabel(); self.range = QComboBox()
         self.equipment_label = QLabel(); self.equipment = QComboBox(); self.aggregation_label = QLabel(); self.aggregation = QComboBox()
         self.chart_label = QLabel(); self.chart_filter = QComboBox()
-        for control in (self.range, self.equipment, self.aggregation, self.chart_filter): control.currentIndexChanged.connect(self.refresh)
-        for widget in (self.range_label, self.range, self.equipment_label, self.equipment, self.aggregation_label, self.aggregation, self.chart_label, self.chart_filter): controls.addWidget(widget)
-        controls.addStretch(1); self.layout.addLayout(controls)
+        self.start_label = QLabel(); self.end_label = QLabel()
+        self.start_time = self._date_editor(); self.end_time = self._date_editor()
+        self.compare_enabled = QCheckBox(); self.period_a_label = QLabel(); self.period_b_label = QLabel()
+        self.period_a_start = self._date_editor(); self.period_a_end = self._date_editor()
+        self.period_b_start = self._date_editor(); self.period_b_end = self._date_editor()
+        controls.addWidget(self.range_label, 0, 0); controls.addWidget(self.range, 0, 1)
+        controls.addWidget(self.aggregation_label, 0, 2); controls.addWidget(self.aggregation, 0, 3)
+        controls.addWidget(self.equipment_label, 0, 4); controls.addWidget(self.equipment, 0, 5)
+        controls.addWidget(self.start_label, 1, 0); controls.addWidget(self.start_time, 1, 1)
+        controls.addWidget(self.end_label, 1, 2); controls.addWidget(self.end_time, 1, 3)
+        controls.addWidget(self.chart_label, 1, 4); controls.addWidget(self.chart_filter, 1, 5)
+        controls.addWidget(self.compare_enabled, 2, 0, 1, 2)
+        controls.addWidget(self.period_a_label, 3, 0); controls.addWidget(self.period_a_start, 3, 1); controls.addWidget(self.period_a_end, 3, 2)
+        controls.addWidget(self.period_b_label, 3, 3); controls.addWidget(self.period_b_start, 3, 4); controls.addWidget(self.period_b_end, 3, 5)
+        controls.setColumnStretch(6, 1); self.layout.addLayout(controls)
+        self.range.currentIndexChanged.connect(self._range_changed)
+        for control in (self.equipment, self.aggregation, self.chart_filter): control.currentIndexChanged.connect(self.refresh)
+        for editor in (self.start_time, self.end_time, self.period_a_start, self.period_a_end, self.period_b_start, self.period_b_end): editor.dateTimeChanged.connect(self.refresh)
+        self.compare_enabled.toggled.connect(self._comparison_changed)
         self.metadata = QLabel(); self.metadata.setObjectName("Muted"); self.metadata.setWordWrap(True); self.layout.addWidget(self.metadata)
         grid = QGridLayout(); self.cards = {key: MetricCard(title) for key, title in (("energy", "energy_total"), ("peak", "energy_peak"), ("cop", "analysis_cop"), ("dt", "analysis_delta_t"))}
         for i, card in enumerate(self.cards.values()): grid.addWidget(card, 0, i)
@@ -288,32 +327,108 @@ class EnergyAnalysisPage(QWidget):
         self.scroll.setWidget(self.content); self.layout.addWidget(self.scroll, 1)
         self.retranslate_ui()
 
+    @staticmethod
+    def _date_editor() -> QDateTimeEdit:
+        editor = QDateTimeEdit(); editor.setCalendarPopup(True); editor.setDisplayFormat("yyyy-MM-dd HH:mm")
+        return editor
+
     def retranslate_ui(self):
         self.heading.setText(tr("energy_analysis")); current_range = self.range.currentData() or "all"; current_aggregation = self.aggregation.currentData() or "auto"; current_chart = self.chart_filter.currentData() or "all"
         for combo, entries, selected in (
-            (self.range, [("all", tr("energy_range_all")), ("24h", tr("energy_range_24h")), ("7d", tr("energy_range_7d")), ("30d", tr("energy_range_30d"))], current_range),
-            (self.aggregation, [("auto", tr("energy_aggregation_auto")), ("hour", tr("energy_aggregation_hour")), ("day", tr("energy_aggregation_day")), ("week", tr("energy_aggregation_week")), ("month", tr("energy_aggregation_month"))], current_aggregation),
+            (self.range, [("all", tr("energy_range_all")), ("24h", tr("energy_range_24h")), ("7d", tr("energy_range_7d")), ("30d", tr("energy_range_30d")), ("custom", tr("energy_range_custom"))], current_range),
+            (self.aggregation, [("auto", tr("energy_aggregation_auto")), ("raw", tr("energy_aggregation_raw")),
+                                ("5min", tr("energy_aggregation_5min")), ("15min", tr("energy_aggregation_15min")),
+                                ("30min", tr("energy_aggregation_30min")), ("hour", tr("energy_aggregation_hour")),
+                                ("day", tr("energy_aggregation_day")), ("week", tr("energy_aggregation_week")),
+                                ("month", tr("energy_aggregation_month"))], current_aggregation),
             (self.chart_filter, [("all", tr("energy_chart_all")), *[(code, tr(title)) for code, title, _, _, _ in self.CHARTS]], current_chart),
         ):
             combo.blockSignals(True); combo.clear()
             for value, label in entries: combo.addItem(label, value)
             combo.setCurrentIndex(max(0, combo.findData(selected))); combo.blockSignals(False)
-        self.range_label.setText(tr("energy_time_range")); self.equipment_label.setText(tr("analysis_equipment_filter")); self.aggregation_label.setText(tr("energy_aggregation")); self.chart_label.setText(tr("energy_metric"))
+        self.range_label.setText(tr("energy_time_range")); self.start_label.setText(tr("energy_start_time")); self.end_label.setText(tr("energy_end_time"))
+        self.equipment_label.setText(tr("analysis_equipment_filter")); self.aggregation_label.setText(tr("energy_aggregation")); self.chart_label.setText(tr("energy_metric"))
+        self.compare_enabled.setText(tr("energy_custom_comparison")); self.period_a_label.setText(tr("energy_period_a")); self.period_b_label.setText(tr("energy_period_b"))
         for card in self.cards.values(): card.retranslate_ui()
         for index, (key, _) in enumerate(self.GROUPS): self.section_tabs.setTabText(index, tr(key))
         self.refresh()
 
+    def _dataset_bounds(self):
+        if self.context.dataframe is None: return None
+        time_name = self.context.import_metadata.get("time_column")
+        if time_name not in self.context.dataframe.columns: return None
+        values = pd.to_datetime(self.context.dataframe[time_name], errors="coerce").dropna()
+        return (values.min(), values.max()) if not values.empty else None
+
+    def _ensure_scope_dates(self) -> None:
+        project_id = self.context.current_project.project_id if self.context.current_project else None
+        bounds = self._dataset_bounds()
+        if not bounds: return
+        start, end = bounds; midpoint = start + (end - start) / 2
+        scope_key = (project_id, len(self.context.dataframe), start.isoformat(), end.isoformat())
+        if scope_key == self._scope_project_id: return
+        self._updating_scope = True
+        try:
+            for editor, value in ((self.start_time, start), (self.end_time, end),
+                                  (self.period_a_start, start), (self.period_a_end, midpoint),
+                                  (self.period_b_start, midpoint), (self.period_b_end, end)):
+                editor.blockSignals(True); editor.setDateTime(QDateTime(value.to_pydatetime())); editor.blockSignals(False)
+            self._scope_project_id = scope_key
+        finally:
+            self._updating_scope = False
+        self._update_scope_control_state()
+
+    def _update_scope_control_state(self) -> None:
+        custom = self.range.currentData() == "custom"
+        self.start_time.setEnabled(custom); self.end_time.setEnabled(custom)
+        enabled = self.compare_enabled.isChecked()
+        for widget in (self.period_a_label, self.period_b_label, self.period_a_start, self.period_a_end, self.period_b_start, self.period_b_end): widget.setEnabled(enabled)
+
+    def _range_changed(self) -> None:
+        self._update_scope_control_state(); self.refresh()
+
+    def _comparison_changed(self) -> None:
+        self._update_scope_control_state(); self.refresh()
+
+    def _selected_bounds(self):
+        bounds = self._dataset_bounds()
+        if not bounds: return None, None
+        option = self.range.currentData(); start, end = bounds
+        if option == "custom":
+            return pd.Timestamp(self.start_time.dateTime().toPyDateTime()), pd.Timestamp(self.end_time.dateTime().toPyDateTime())
+        if option != "all":
+            end = bounds[1]; start = max(bounds[0], end - pd.Timedelta(hours={"24h": 24, "7d": 168, "30d": 720}[option]))
+        return start, end
+
+    def _comparison_periods(self):
+        if not self.compare_enabled.isChecked(): return None
+        periods = {
+            "a": (self.period_a_start.dateTime().toPyDateTime(), self.period_a_end.dateTime().toPyDateTime()),
+            "b": (self.period_b_start.dateTime().toPyDateTime(), self.period_b_end.dateTime().toPyDateTime()),
+        }
+        if any(start > end for start, end in periods.values()):
+            self._scope_error = tr("energy_invalid_comparison")
+            return {}
+        return periods
+
     def _result(self):
         if self.context.dataframe is None or not self.context.semantic_result or not self.context.current_project: return None
-        frame = self.context.dataframe; time_name = self.context.import_metadata.get("time_column"); option = self.range.currentData(); selected = self.equipment.currentData()
-        if time_name in frame.columns and option != "all":
-            timestamps = pd.to_datetime(frame[time_name], errors="coerce"); hours = {"24h": 24, "7d": 168, "30d": 720}[option]
-            frame = frame.loc[timestamps >= timestamps.max() - pd.Timedelta(hours=hours)].copy()
+        self._scope_error = None
+        start, end = self._selected_bounds(); selected = self.equipment.currentData()
+        if start is not None and end is not None and start > end:
+            self._scope_error = tr("energy_invalid_period")
+            return None
         analytics = self.context.diagnosis_result.analytics if self.context.diagnosis_result else None
-        return self.context.energy_analysis.analyze(frame, self.context.semantic_result, self.context.current_project.project_id, self.context.import_metadata, self.context.equipment_organization, analytics, selected, self.aggregation.currentData())
+        comparison_periods = self._comparison_periods()
+        if self._scope_error:
+            return None
+        return self.context.energy_analysis.analyze(self.context.dataframe, self.context.semantic_result, self.context.current_project.project_id,
+            self.context.import_metadata, self.context.equipment_organization, analytics, selected, self.aggregation.currentData(),
+            period_start=start, period_end=end, comparison_periods=comparison_periods)
 
     def refresh(self):
-        if not hasattr(self, "chart_layout"): return
+        if not hasattr(self, "chart_layout") or self._updating_scope: return
+        self._ensure_scope_dates()
         self.equipment.blockSignals(True); chosen = self.equipment.currentData(); self.equipment.clear(); self.equipment.addItem(tr("analysis_all_equipment"), None)
         for item in (self.context.equipment_organization.equipment if self.context.equipment_organization else []): self.equipment.addItem(item.name, normalize_equipment_id(item.name) or item.name)
         self.equipment.setCurrentIndex(max(0, self.equipment.findData(chosen))); self.equipment.blockSignals(False)
@@ -322,15 +437,23 @@ class EnergyAnalysisPage(QWidget):
             child = self.chart_grid.takeAt(0)
             if child.widget(): child.widget().deleteLater()
         if result is None:
-            self.metadata.setText(tr("energy_no_data")); self.readiness_label.setText(tr("analysis_not_ready"));
+            self.metadata.setText(self._scope_error or tr("energy_no_data")); self.readiness_label.setText(tr("analysis_not_ready"));
             for card in self.cards.values(): card.set_value("—")
             return
+        self.context.selected_period = self.range.currentData() or "all"
+        self.context.selected_equipment_id = self.equipment.currentData()
+        self.context.energy_analysis_scope = {"start": result.start, "end": result.end, "aggregation": result.aggregation,
+                                              "aggregation_rule": result.aggregation_rule, "equipment_id": result.equipment_filter,
+                                              "comparison_periods": self._comparison_periods()}
+        self.context.energy_analysis_view_result = result
         q = result.data_quality; self.metadata.setText(tr("energy_metadata", start=result.start or "—", end=result.end or "—", interval=(f"{result.sampling_interval_minutes:g}" if result.sampling_interval_minutes else "—"), equipment=result.summary["equipment_count"], energy=result.summary["energy_points"], temperature=result.summary["temperature_points"], missing=q["missing_ratio"]))
         summary = result.summary
         self.cards["energy"].set_value("—" if summary["total_energy_kwh"] is None else f"{summary['total_energy_kwh']:,.1f} kWh")
         self.cards["peak"].set_value("—" if summary["peak_power_kw"] is None else f"{summary['peak_power_kw']:,.1f} kW")
         self.cards["cop"].set_value("—" if summary["average_cop"] is None else f"{summary['average_cop']:.2f}")
         self.cards["dt"].set_value("—" if summary["average_delta_t_c"] is None else f"{summary['average_delta_t_c']:.2f} °C")
+        self.cards["cop"].setToolTip(tr("energy_valid_samples", count=summary.get("average_cop_valid_sample_count", 0)))
+        self.cards["dt"].setToolTip(tr("energy_valid_samples", count=summary.get("average_delta_t_valid_sample_count", 0)))
         selected_chart = self.chart_filter.currentData()
         group_codes = self.GROUPS[self.section_tabs.currentIndex()][1]
         availability = []
@@ -363,7 +486,8 @@ class EnergyAnalysisPage(QWidget):
             elif code == "load_heatmap":
                 payload["colorbar_label"] = tr("energy_axis_power")
             card = QFrame(); card.setObjectName("Card"); box = QVBoxLayout(card); title = QLabel(tr(title_key)); title.setObjectName("CardTitle"); box.addWidget(title)
-            scope = QLabel(tr("energy_chart_scope", start=TimeSeriesChart._scope_time(result.start), end=TimeSeriesChart._scope_time(result.end), interval=(f"{result.sampling_interval_minutes:g}" if result.sampling_interval_minutes else "—"), equipment=(self.equipment.currentText() if self.equipment.currentData() else tr("analysis_all_equipment")))); scope.setObjectName("Muted"); scope.setWordWrap(True); box.addWidget(scope)
+            resolution = self._resolution_label(result)
+            scope = QLabel(tr("energy_chart_scope", start=TimeSeriesChart._scope_time(result.start), end=TimeSeriesChart._scope_time(result.end), resolution=resolution, equipment=(self.equipment.currentText() if self.equipment.currentData() else tr("analysis_all_equipment")))); scope.setObjectName("Muted"); scope.setWordWrap(True); box.addWidget(scope)
             chart = TimeSeriesChart(kind); chart.set_payload(payload); box.addWidget(chart)
             # Trends and heatmaps benefit from the full reading width; paired
             # comparison charts remain side-by-side on ordinary desktop sizes.

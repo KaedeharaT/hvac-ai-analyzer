@@ -52,6 +52,8 @@ class ApplicationContext:
         self.equipment_organization: EquipmentOrganization | None = None
         self.diagnosis_result: DiagnosisResult | None = None
         self.energy_analysis_result: EnergyAnalysisResult | None = None
+        self.energy_analysis_view_result: EnergyAnalysisResult | None = None
+        self.energy_analysis_scope: dict = {}
         self.opportunities = []
         self.user_interpretations = []
         self.cop_status = "Not evaluated"
@@ -78,6 +80,8 @@ class ApplicationContext:
         self.equipment_organization = None
         self.diagnosis_result = None
         self.energy_analysis_result = None
+        self.energy_analysis_view_result = None
+        self.energy_analysis_scope = {}
         self.opportunities = []
         self.user_interpretations = []
         self.selected_equipment_id = None
@@ -118,6 +122,8 @@ class ApplicationContext:
         self.opportunities = []
         self.user_interpretations = []
         self.energy_analysis_result = self.energy_analysis.analyze(self.dataframe, self.semantic_result, project_id, self.import_metadata, self.equipment_organization) if self.dataframe is not None and self.semantic_result else None
+        self.energy_analysis_view_result = self.energy_analysis_result
+        self.energy_analysis_scope = {}
         # Product-owned BEMS cache remains untouched.  Only stale derived
         # semantics are rebuilt after an equipment-resolution pipeline update.
         if self.dataframe is not None and saved and any(item.algorithm_version != PIPELINE_VERSION for item in saved):
@@ -155,6 +161,8 @@ class ApplicationContext:
             self.dataframe, self.semantic_result, self.current_project.project_id,
             self.import_metadata, self.equipment_organization, self.diagnosis_result.analytics,
         )
+        self.energy_analysis_view_result = self.energy_analysis_result
+        self.energy_analysis_scope = {}
         # Restoring data must never trigger an LLM request or create a second
         # interpretation of the findings.
         self.opportunities = OpportunityService(enable_llm=False).identify(self.diagnosis_result.findings)
@@ -219,7 +227,7 @@ class ApplicationContext:
         self.current_project.semantic_summary = {"status": "stale", "data_revision": self.current_project.data_revision}
         self.current_project.analysis_summary = {"status": "stale", "data_revision": self.current_project.data_revision}
         self.current_project.time_range = {"start": self.import_metadata.get("start"), "end": self.import_metadata.get("end")}
-        self.semantic_result = None; self.equipment = []; self.equipment_organization = None; self.diagnosis_result = None; self.energy_analysis_result = None; self.opportunities = []; self.user_interpretations = []
+        self.semantic_result = None; self.equipment = []; self.equipment_organization = None; self.diagnosis_result = None; self.energy_analysis_result = None; self.energy_analysis_view_result = None; self.energy_analysis_scope = {}; self.opportunities = []; self.user_interpretations = []
         self.projects.save(self.current_project)
         return result
 
@@ -235,7 +243,7 @@ class ApplicationContext:
         self.current_project.semantic_summary = {"status": "stale", "data_revision": self.current_project.data_revision}
         self.current_project.analysis_summary = {"status": "stale", "data_revision": self.current_project.data_revision}
         self.dataframe = None; self.semantic_result = None; self.equipment = []; self.equipment_organization = None
-        self.diagnosis_result = None; self.energy_analysis_result = None; self.opportunities = []; self.user_interpretations = []; self.import_metadata = {}
+        self.diagnosis_result = None; self.energy_analysis_result = None; self.energy_analysis_view_result = None; self.energy_analysis_scope = {}; self.opportunities = []; self.user_interpretations = []; self.import_metadata = {}
         self.projects.save(self.current_project)
 
     def run_semantics(self):
@@ -255,6 +263,7 @@ class ApplicationContext:
         )
         self.equipment = self.equipment_organization.equipment
         self.energy_analysis_result = self.energy_analysis.analyze(self.dataframe, self.semantic_result, self.current_project.project_id, self.import_metadata, self.equipment_organization)
+        self.energy_analysis_view_result = self.energy_analysis_result; self.energy_analysis_scope = {}
         counts = {"ACCEPT": 0, "REVIEW": 0, "ABSTAIN": 0}
         for item in self.semantic_result.semantic_results:
             counts[item.status.value] += 1
@@ -276,6 +285,7 @@ class ApplicationContext:
         self.equipment_organization = self.diagnosis_result.equipment
         self.equipment = self.equipment_organization.equipment if self.equipment_organization else []
         self.energy_analysis_result = self.energy_analysis.analyze(self.dataframe, self.semantic_result, self.current_project.project_id, self.import_metadata, self.equipment_organization, self.diagnosis_result.analytics)
+        self.energy_analysis_view_result = self.energy_analysis_result; self.energy_analysis_scope = {}
         emit("energy_opportunities", "running", None, 0, len(self.diagnosis_result.findings))
         self.opportunities = self.opportunities_service.identify(self.diagnosis_result.findings, emit)
         self.user_interpretations = [self.interpretation.interpret(item, language=self.settings.language) for item in self.diagnosis_result.findings]
