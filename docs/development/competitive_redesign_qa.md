@@ -54,4 +54,12 @@ The repository-local capture helper exercised Overview, Equipment, Energy, Diagn
 - There is no work-order execution, tariff/cost model, verified savings workflow or control path.
 - Drawing status overlays require a human-confirmed equipment association.
 - Natural-language quality remains provider/model dependent; technical trace is required when assessing Agent behavior.
-- 150% DPI was not treated as a release gate in this environment; 100% and 125% were directly captured.
+- 100%, 125% and 150% Qt scaling were directly captured; the layouts remained readable with scrolling where the logical viewport was compact.
+
+## Role-based review
+
+- **Facility manager:** The dashboard now exposes readiness, attention items and the next check without requiring chart interpretation. It still lacks portfolio aggregation and work-order execution by design.
+- **HVAC engineer:** Equipment detail, rule evidence, passed checks and finding drill-down are usable. System topology and field verification remain external engineering work.
+- **Energy analyst:** Capability-driven KPI charts, measured period comparison and deterministic report export are available. A formal tariff model and measurement-and-verification baseline are not.
+- **AI engineer:** Single-Agent and Multi-Agent modes share read-only tools, evidence boundaries and traces. Natural-language quality remains model-dependent and is not treated as an engineering result.
+- **Researcher:** The redesign consumes existing service outputs and does not change experiment runners, provenance, frozen evaluation data or research artifacts.
