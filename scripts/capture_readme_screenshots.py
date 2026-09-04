@@ -1,24 +1,17 @@
-"""Capture reviewed, repository-local screenshots for the project README.
+"""Capture privacy-safe README screenshots from the current production UI.
 
-This is intentionally a presentation helper, not a test fixture.  It opens the
-existing local Project 7 data in the real desktop application and captures the
-same pages shown to users.  The AI Assistant capture uses one normal bounded
-Agent response so its source cards are genuine; it never changes BEMS data,
-semantic mappings, findings, or recommendations.
-
-Run from the repository root:
-    python scripts/capture_readme_screenshots.py
+Every displayed project value is generated from an in-memory synthetic BEMS
+dataset and synthetic drawing. No local user project, model path, API key, or
+private experiment artifact is read by this script.
 """
 from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 
-
-# This lets a headless Windows/Anaconda Qt runtime render the actual UI with a
-# normal Windows font instead of replacing labels with blank glyphs.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,17 +22,27 @@ from PyQt5.QtCore import QEventLoop, QTimer
 from PyQt5.QtGui import QFont, QFontDatabase
 from PyQt5.QtWidgets import QApplication
 
-from building_ai.i18n import LanguageManager
 from building_ai.agent_runtime import AgentRuntime
+from building_ai.i18n import LanguageManager
+from building_ai.knowledge import KnowledgeService
+from building_ai.knowledge_catalog import CATALOG_DIR, load_materialized_facts, source_registry
 from building_ai.ui.agent_chat import AgentProcessCard
-from building_ai.ui.context import ApplicationContext
 from building_ai.ui.main_window import MainWindow
+from scripts.capture_product_qa import _context
 
 
 OUTPUT = ROOT / "docs" / "images"
+PAGES = {
+    "dashboard.png": "dashboard",
+    "equipment.png": "equipment",
+    "energy-analysis.png": "energy_analysis",
+    "diagnostics.png": "analysis",
+    "knowledge-base.png": "knowledge_base",
+    "drawing-intelligence.png": "drawing_intelligence",
+}
 
 
-def process_events(app: QApplication, milliseconds: int = 250) -> None:
+def process_events(app: QApplication, milliseconds: int = 200) -> None:
     loop = QEventLoop()
     QTimer.singleShot(milliseconds, loop.quit)
     loop.exec_()
@@ -47,9 +50,6 @@ def process_events(app: QApplication, milliseconds: int = 250) -> None:
 
 
 def configure_font(app: QApplication) -> None:
-    """Use Segoe UI where available, without changing application production UI."""
-    # Microsoft YaHei covers the Chinese language-switch label too; Segoe UI
-    # is a good English fallback on minimal Windows systems.
     windows_fonts = Path(os.environ.get("WINDIR", "")) / "Fonts"
     for font_path in (windows_fonts / "msyh.ttc", windows_fonts / "segoeui.ttf"):
         if not font_path.exists():
@@ -65,58 +65,52 @@ def main() -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     configure_font(app)
     LanguageManager.instance().set_language("en_US")
-
-    context = ApplicationContext()
-    # MainWindow synchronizes the shared language manager from persisted
-    # settings, so make this capture explicitly English before it is built.
-    context.settings.language = "en_US"
-    projects = context.projects.list()
-    if not projects:
-        raise RuntimeError("A local reviewed project is required to capture README screenshots.")
-    project = next((item for item in projects if item.name == "7"), projects[0])
-    context.open_project(project.project_id)
-    context.ensure_analysis_results()
-
-    window = MainWindow(context)
-    window.resize(1440, 920)
-    window.show()
-    process_events(app)
-
     OUTPUT.mkdir(parents=True, exist_ok=True)
-    pages = {
-        "dashboard.png": "dashboard",
-        "energy-analysis.png": "energy_analysis",
-        "knowledge-base.png": "knowledge_base",
-    }
-    for filename, page_key in pages.items():
-        window.navigate_to(page_key)
+
+    with tempfile.TemporaryDirectory(prefix="buildingai-readme-") as value:
+        context = _context(Path(value))
+        KnowledgeService(context.database).ingest_catalog(
+            source_registry(), load_materialized_facts(CATALOG_DIR)
+        )
+        window = MainWindow(context)
+        window.resize(1440, 900)
+        window.show()
         process_events(app)
-        if not window.grab().save(str(OUTPUT / filename), "PNG"):
-            raise RuntimeError(f"Could not save {filename}")
 
-    # Capture one real, project-grounded assistant response.  This uses the
-    # normal bounded runtime (including project tools and knowledge retrieval)
-    # but invokes the existing completion presenter synchronously so the
-    # screenshot script does not need a user interaction or a worker thread.
-    window.navigate_to("agent")
-    agent_page = window.page_by_key["agent"]
-    query = "What should I improve first for AHP-3-3?"
-    route = AgentRuntime(context).route(query)
-    plan = AgentRuntime(context).plan(route, project.project_id)
-    agent_page.append_user_message(query)
-    agent_page._current_process = AgentProcessCard(route, plan)
-    agent_page.transcript.append(agent_page._current_process)
-    agent_page._request_started = time.monotonic()
-    response = AgentRuntime(context).run(query, project.project_id, agent_page._conversation_id)
-    agent_page._agent_completed(response)
-    process_events(app, 500)
-    agent_page.chat_scroll.verticalScrollBar().setValue(agent_page.chat_scroll.verticalScrollBar().maximum())
-    process_events(app, 100)
-    if not window.grab().save(str(OUTPUT / "ai-assistant.png"), "PNG"):
-        raise RuntimeError("Could not save ai-assistant.png")
+        for filename, page_key in PAGES.items():
+            payload = {"equipment_id": context.equipment[0].name} if page_key == "equipment" else {}
+            window.navigate_to(page_key, payload)
+            process_events(app)
+            if page_key == "analysis":
+                window.page_by_key["analysis"].tabs.setCurrentIndex(2)
+                process_events(app)
+            if not window.grab().save(str(OUTPUT / filename), "PNG"):
+                raise RuntimeError(f"Could not save {filename}")
 
-    window.close()
-    print(f"Captured {len(pages) + 1} screenshots in {OUTPUT}")
+        window.resize(1600, 1080)
+        process_events(app)
+        window.navigate_to("agent", {"equipment_id": context.equipment[0].name})
+        agent_page = window.page_by_key["agent"]
+        query = "What should I improve first for AHP-01?"
+        runtime = AgentRuntime(context)
+        route = runtime.route(query)
+        plan = runtime.plan(route, context.current_project.project_id)
+        agent_page.append_user_message(query)
+        agent_page._current_process = AgentProcessCard(route, plan)
+        agent_page.transcript.append(agent_page._current_process)
+        agent_page._request_started = time.monotonic()
+        response = runtime.run(query, context.current_project.project_id, agent_page._conversation_id)
+        agent_page._agent_completed(response)
+        process_events(app, 500)
+        chat_bar = agent_page.chat_scroll.verticalScrollBar()
+        chat_bar.setValue(round(chat_bar.maximum() * 0.18))
+        process_events(app)
+        if not window.grab().save(str(OUTPUT / "ai-assistant.png"), "PNG"):
+            raise RuntimeError("Could not save ai-assistant.png")
+
+        window.close()
+
+    print(f"Captured {len(PAGES) + 1} synthetic, privacy-safe README screenshots in {OUTPUT}")
     return 0
 
 

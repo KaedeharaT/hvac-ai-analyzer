@@ -1,198 +1,184 @@
 # BuildingAI
 
-> **Agentic AI for Building Energy Intelligence**
+### Agentic AI Platform for Building Energy Intelligence
 
-Turn heterogeneous BEMS data and building drawings into equipment-aware energy analysis, diagnostics, and actionable recommendations.
+Turn heterogeneous BEMS data and building drawings into equipment-aware analytics, diagnostics, and evidence-grounded energy-saving recommendations.
 
-面向建筑运行数据与图纸的多模态智能能源分析与 Agent 应用平台。
-
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![CI](https://github.com/KaedeharaT/hvac-ai-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/KaedeharaT/hvac-ai-analyzer/actions/workflows/ci.yml)
-![PyQt5](https://img.shields.io/badge/Desktop-PyQt5-41CD52)
-![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)
-![LLM](https://img.shields.io/badge/LLM-Configurable-6B4FBB)
-![Agentic AI](https://img.shields.io/badge/AI-Agentic-2563EB)
-![RAG](https://img.shields.io/badge/Knowledge-RAG-0F766E)
 
-**English | [简体中文](README_zh.md)** · [Architecture](docs/architecture.md) · [Drawing Intelligence](docs/drawing_intelligence.md) · [Knowledge sources](docs/knowledge_sources.md)
+**English | [简体中文](README_zh.md)**
 
-![BuildingAI dashboard](docs/images/dashboard.png)
+![BuildingAI overview](docs/images/dashboard.png)
 
-*BEMS + Drawings → Equipment Context → Analytics → Diagnostics → AI Assistant. Local, anonymized demonstration project.*
+*Current PyQt interface using a synthetic, privacy-safe demonstration project.*
 
-## What it does
+## What BuildingAI solves
 
-- Understands unfamiliar Chinese, English, and Japanese BEMS / HVAC point names.
-- Organizes equipment and operating signals into a project-specific equipment context.
-- Calculates only the energy, power, temperature, COP, and ΔT indicators supported by the available data.
-- Presents capability-driven energy analysis with explicit chart scope, axes, units, and legends.
-- Produces HVAC findings from project evidence and deterministic engineering logic, then turns them into practical next steps.
-- Ingests PNG / JPG / JPEG drawings through an optional YOLOv8 adapter, with bounding boxes, human review, and manual equipment association.
-- Answers questions through read-only project tools and a separate, cited multilingual knowledge base.
+BEMS projects rarely arrive with a shared schema. Point names vary between sites, Chinese, English, and Japanese labels may coexist, equipment relationships are implicit, and each dataset supports a different set of engineering calculations. Engineers therefore spend substantial time organizing data before they can investigate performance.
 
-## Why it matters
-
-Building energy analysis often starts with a difficult manual task: interpreting hundreds of inconsistent BEMS point names before engineers can tell which equipment matters or what the data means. BuildingAI reduces that setup work by organizing heterogeneous operational data into equipment-aware analysis, then presenting the result as evidence-backed insights that engineers and non-specialists can act on.
-
-**BuildingAI is not a generic chatbot.** It works with BEMS operational data, drawing evidence, equipment relationships, engineering KPIs, and deterministic findings. The LLM / Agent layer is used for task orchestration, read-only tool use, evidence completion, explanation, and knowledge retrieval. There is no BAS write path: site teams remain responsible for validation and operational decisions.
-
-## From raw data to action
+BuildingAI turns that work into one reviewable flow:
 
 ```mermaid
 flowchart LR
-    A[BEMS CSV / Excel] --> B[Semantic Understanding]
-    D[Building Drawings] --> E[Drawing Intelligence]
-    B --> C[Equipment Context]
-    E --> C
-    C --> F[Energy Analytics]
-    F --> G[Diagnostics]
-    G --> H[Recommendations]
-    H --> I[AI Assistant]
+    B[BEMS CSV / Excel] --> S[Semantic Understanding]
+    D[PNG / JPG / JPEG Drawings] --> V[Drawing Intelligence]
+    S --> E[Equipment Context]
+    V --> E
+    E --> A[Energy & KPI Analytics]
+    A --> F[Deterministic Findings]
+    F --> R[Recommendations]
+    R --> I[AI Investigation]
 ```
 
-## Product experience
+It is not a generic chatbot. Project facts come from imported data, reviewed mappings, deterministic engineering calculations, and confirmed drawing evidence. The Agent selects read-only tools, completes evidence, retrieves professional references, and explains results; it cannot control a BAS or modify project evidence.
 
-### 1. Building Overview
+## Product workflow
 
-The dashboard organizes measured energy, demand, equipment status, and reviewed operational findings into a project-level view that can be read quickly.
+### Overview and data readiness
 
-### 2. Professional Energy Analysis
+The project overview prioritizes data readiness, analysis coverage, energy summaries, active findings, and equipment that needs review. Onboarding exposes imported, mapped, review-required, abstained, and confirmed points so unavailable analytics have an explicit reason.
 
-Energy Analysis dynamically shows only the indicators the selected project can support: energy, power, temperature, ΔT, COP, typical daily profile, heatmap, and equipment comparison. Each chart exposes its scope, axis meaning, unit, and series legend rather than relying on an unlabeled line.
+### Equipment-centric investigation
 
-![Energy analysis page](docs/images/energy-analysis.png)
+Equipment is the main investigation unit rather than a collection of unrelated charts. An equipment detail view connects identity, available signals, KPI coverage, COP, ΔT, power, energy, trends, deterministic findings, passed checks, drawing mappings, and contextual AI entry points.
 
-### 3. Evidence-grounded Diagnostics
+![Equipment detail](docs/images/equipment.png)
 
-Findings are derived from actual project data and deterministic engineering logic; general RAG material is used to explain a finding or suggest safe checks, not to invent one. Recommendations remain bounded by the available evidence and require site validation.
+*Synthetic equipment and operational data.*
 
-![Diagnostics findings and recommended actions](docs/images/diagnostics.png)
+### Professional Energy Analysis
 
-### 4. AI Assistant with source-aware answers
+A shared scope controls project equipment, custom date/time range, and resolution. Supported resolutions are **1 minute, 10 minutes, 1 hour, 1 day, 1 week, 1 month, and 1 year**. BuildingAI never interpolates or duplicates samples to create a resolution finer than the source data.
 
-The Assistant shows a concise analysis process, separates **Project evidence** from **Reference material**, and makes each cited official source available through the UI. Internal tool identifiers stay inside the technical trace rather than in normal user-facing language.
+The calculation boundary remains physical:
 
-![AI Assistant reference-material cards](docs/images/ai-assistant.png)
+- power is aggregated by mean; peak power is always the raw maximum inside the selected scope;
+- interval energy is summed, while cumulative meters are differenced before aggregation;
+- temperature, ΔT, and COP are averaged; COP retains its valid-sample count;
+- chart metadata records period, resolution, and equipment, and the time axis changes between time, date, week, month, and year;
+- daily profiles and date/time heatmaps are shown only at meaningful sub-daily resolutions.
 
-### 5. Drawing Intelligence
+Available views include energy, power, temperature, ΔT, COP, typical daily profile, heatmap, weather relation, equipment comparison, and custom period comparison. They are capability-driven: a project without the required signals gets an explanation, not an empty chart or fabricated value.
 
-BuildingAI can ingest architectural / HVAC drawings through an optional YOLOv8 vision adapter. Detection boxes remain AI predictions until reviewed; confirmed objects can then be manually linked to project equipment for downstream read-only Agent queries.
+![Energy Analysis](docs/images/energy-analysis.png)
 
-![Synthetic demonstration drawing in Drawing Intelligence](docs/images/drawing-intelligence.png)
+*Synthetic time-series data; axes, units, scope, and aggregation are produced by the current application.*
 
-*Synthetic demonstration drawing. The current legacy YOLOv8 model supports `aircon`, `baseline_mark`, and `window`; model weights are not distributed with this repository. Equipment-to-drawing association is human-confirmed, not automatic.*
+### Evidence-grounded Diagnostics
 
-For example, when asked “Where is AHP-3-3 on the drawing?”, the Agent reads a confirmed drawing mapping and returns the drawing, page, and object information. Without one, it abstains: `No reliable drawing association has been confirmed for this equipment.`
+A finding is generated from project data and deterministic engineering rules. The investigation view keeps five concepts separate:
 
-### 6. Knowledge Base
+1. **Finding** — what the rule detected.
+2. **Project Evidence** — measurements, period, and valid samples.
+3. **Possible Causes** — hypotheses to inspect, not confirmed faults.
+4. **Recommended Checks** — bounded next actions and verification metrics.
+5. **Reference Material** — general engineering guidance retrieved from the Knowledge Base.
 
-The searchable Knowledge Base provides multilingual HVAC, operations, and energy-saving guidance with source attribution; the catalog and its scope are described below.
+Passed checks mean only that an executed rule did not trigger under the available evidence; they do not certify that equipment is healthy. Financial savings are not invented when tariff or intervention evidence is absent.
 
-![Knowledge Base page](docs/images/knowledge-base.png)
+![Diagnostics workbench](docs/images/diagnostics.png)
 
-## Agentic AI in one real workflow
+*Synthetic finding and supporting evidence.*
 
-For a question such as **“Which machine is doing the worst?”**, the Agent plans bounded read-only queries, checks whether project evidence is sufficient, retrieves engineering guidance only when useful, and keeps project facts separate from reference material.
+### Context-aware AI Assistant
+
+The Assistant inherits the selected project, equipment, page, and finding context. Guided prompts support investigation without making users repeat identifiers. Responses present the investigation result, evidence checked, possible causes, recommended checks, and citations while keeping **Project Evidence** separate from **Reference Material**.
+
+![AI Assistant](docs/images/ai-assistant.png)
+
+*Synthetic project context; the normal read-only Agent runtime produced the displayed investigation.*
+
+### Drawing Intelligence
+
+The optional Ultralytics adapter loads a locally configured YOLOv8 detector for PNG, JPG, and JPEG drawings. The current legacy model vocabulary is limited to `aircon`, `baseline_mark`, and `window`; weights are not distributed with this repository.
+
+Bounding boxes and confidence values remain AI predictions until a person confirms or rejects them. Only a human-confirmed object can be manually associated with equipment and exposed to the Agent as project evidence. Detection does not infer equipment health, topology, or an automatic BEMS-to-drawing match.
+
+![Drawing Intelligence](docs/images/drawing-intelligence.png)
+
+*Synthetic demonstration drawing and test detector output; no private drawing or model weight is included.*
+
+### Searchable Knowledge Base
+
+The repository contains **19 attributed sources** and **154 curated chunks** from China, the United States, Japan, and a small original multilingual engineering synthesis. Search preserves 中文 / English / 日本語 and returns source metadata and URLs.
+
+Project data answers *what happened here*. Knowledge retrieval supports *why it may happen, what to inspect, and how to improve*. A retrieved passage cannot create a project finding.
+
+![Knowledge Base](docs/images/knowledge-base.png)
+
+See the [source registry, licensing boundary, and deterministic rebuild process](docs/knowledge_sources.md).
+
+## Single-Agent and Multi-Agent runtimes
+
+Single-Agent remains the default product runtime and research baseline. An optional role-specialized Multi-Agent V1 supports controlled comparison and complex investigations; it is not assumed to be better.
 
 ```mermaid
 flowchart TD
-    Q[User question] --> R[Structured routing]
-    R --> P[Bounded plan]
-    P --> T[Read-only project tools]
-    T --> E{Evidence sufficient?}
-    E -- No --> X[Reflection / re-plan]
-    X --> T
-    E -- Yes --> K[Optional knowledge retrieval]
-    K --> A[Grounded final answer]
-    A --> O[Trace, citations, and UI presentation]
+    U[User] --> C[Coordinator]
+    C --> D[Data Analyst]
+    C --> W[Drawing Specialist]
+    D --> H[HVAC Expert]
+    H --> K[Knowledge Specialist]
+    W --> R[Reviewer]
+    K --> R
+    H --> R
+    R --> C
+    C --> O[Grounded Answer]
 ```
 
-Planning · Tool Calling · Evidence Checking · Reflection · Memory · RAG · Trace. The runtime is deliberately read-only: it does not call building-control protocols or issue operational commands.
+Specialists exchange typed evidence packets and have separate tool allowlists. The Data Analyst cannot use RAG, the Knowledge specialist cannot declare project facts, the Drawing specialist reads confirmed associations only, and the Reviewer can approve, request evidence, flag conflict, or require abstention. All registered Agent tools are read-only. Parent/child Agent, Tool, LLM, evidence, reflection, and latency traces remain available for technical review.
 
-## A curated building-energy knowledge base
+See [Multi-Agent architecture and permission boundaries](docs/multi_agent_architecture.md).
 
-BuildingAI includes a compact, attributed knowledge catalog for **China, the United States, and Japan**:
+## Research and reproducibility
 
-- **19 trusted sources** and **154 curated knowledge chunks**
-- Original language retained across **中文 / English / 日本語**
-- Normalized concepts connect terms such as `chilled water pump` / `冷冻水泵` / `冷水ポンプ`
-- Covers semantic mapping, equipment/system relationships, engineering principles, O&M, controls, energy saving, retrofit, and ZEB guidance
+The product UI and headless research runner call the same domain services. The research layer adds governance without publishing private data:
 
-Representative sources include Project Haystack, Brick Schema, public Brick / ASHRAE 223 connection guidance, DOE FEMP, NREL / EnergyPlus, DOE Better Buildings, and public guidance from China and Japan. The catalog contains compact attributed summaries and structured ontology facts; it does not copy paywalled standards, vendor manuals, or user documents.
+- SHA-256 dataset identity and immutable data revisions;
+- independently frozen ground truth and project-level development / validation / frozen-test / external-test splits;
+- experiment IDs, Git and dirty-tree provenance, config and environment snapshots, seed, prompt/policy versions, and knowledge hashes;
+- finalized artifact manifests, validation, replay, and failed-run retention;
+- config-driven baseline / ablation matrices and repeated LLM runs with aggregate statistics;
+- Agent trace export, CV model/split provenance, CSV/JSON/Parquet results, and SVG/PDF/PNG publication output;
+- paper claim-to-experiment mapping.
 
-**Important boundary:** project data determines what happened in a particular building. RAG knowledge is used only to explain concepts, suggest cause candidates, and recommend safe next checks—it never creates a project finding by itself.
+Private datasets, annotations, splits, weights, and generated experiment artifacts remain gitignored. Start with the [research protocol](docs/research_protocol.md), [readiness audit](docs/research_readiness_audit.md), and [paper result mapping](docs/paper_result_mapping.md).
 
-See the complete [source registry, usage notes, and rebuild policy](docs/knowledge_sources.md).
+## Evaluation
 
-## Evaluation: stability plus real-model behavior
+The repository uses deterministic tests for product, engineering, safety, research provenance, Single-Agent, and Multi-Agent behavior. The current candidate was revalidated before publication; the exact pytest total and regression results below correspond to this main revision.
 
-BuildingAI uses a two-layer **internal evaluation suite**, not a public benchmark.
+| Check | Current main result |
+| --- | --- |
+| pytest | **175 passed** |
+| Single-Agent deterministic regression | **66 / 66** |
+| Multi-Agent deterministic regression | **66 / 66** |
+| Agentic Acceptance | **26 PASS / 0 FAIL** |
 
-The LLM layer is configurable and model-agnostic. Qwen is currently used as one local evaluation model, but the application and Agent logic are not tied to it. Any provider or model change requires a fresh end-to-end evaluation; the metrics below describe only the documented Qwen configuration.
+The separate 52-case Local-LLM E2E suite is a **documented internal evaluation**, not a public benchmark and not rerun by GitHub CI. Provider/model changes require a new run; automatic metrics do not claim human-verified hallucination rates.
 
-| Layer | Purpose | Current documented run |
-| --- | --- | --- |
-| **Deterministic Agent Regression Suite** | Fast engineering regression for routing, tool calling, grounding, abstention, memory, RAG retrieval, tool failure, and prompt-injection boundaries. | 66 cases. |
-| **Local LLM End-to-End Evaluation** | Executes the complete bounded Agent path with a locally configured open-source LLM, including tools, evidence checks, RAG where relevant, and final-answer generation. | 52 internal cases; Qwen2.5-7B is the documented test configuration. |
-
-The end-to-end suite contains natural-language paraphrases, multi-turn memory, ambiguous requests, missing-data and unknown-equipment abstention, prompt injection, RAG, and tool-degradation cases. It is an internal engineering evaluation, not a public benchmark or a claim of generalization to all building projects.
-
-```powershell
-# Fast deterministic regression
-python scripts/run_agentic_evaluation.py
-
-# Local LLM end-to-end smoke / full run
-python scripts/run_e2e_agent_eval.py --quick
-python scripts/run_e2e_agent_eval.py --full
-```
-
-Evaluation artifacts record provider/model identity, real LLM latency, tool calls, reflections, citations, deterministic failure categories, and safe answer summaries. Token usage is shown as `N/A` when a local provider does not expose it.
+GitHub Actions installs `requirements.txt`, runs the full pytest suite, and runs the deterministic Single-Agent regression on Python 3.10 and 3.11.
 
 ## Architecture
 
 ```mermaid
 flowchart TB
-    subgraph Presentation
-        UI[PyQt desktop]
-        API[FastAPI]
-    end
-    subgraph Application
-        TASK[Task service / worker]
-        AGENT[Bounded Agent runtime]
-    end
-    subgraph Core
-        SEM[Semantic understanding]
-        EQUIP[Equipment discovery]
-        ANALYTICS[Energy analytics & diagnostics]
-    end
-    subgraph AI
-        LLM[local LLM / OpenAI-compatible]
-        MEM[Scoped memory]
-        RAG[Curated RAG]
-        TRACE[Observability & evaluation]
-    end
-    subgraph Infrastructure
-        DB[(SQLite)]
-        DATA[(Parquet / CSV)]
-    end
-    UI --> TASK
-    API --> TASK
-    TASK --> AGENT
-    TASK --> SEM --> EQUIP --> ANALYTICS
-    AGENT --> LLM
-    AGENT --> MEM
-    AGENT --> RAG
-    AGENT --> TRACE
-    SEM --> DB
-    ANALYTICS --> DATA
-    AGENT --> DB
+    IN[BEMS data / Drawings / Optional LLM] --> U[Semantic and Vision Understanding]
+    U --> EC[Project and Equipment Context]
+    EC --> CORE[Deterministic Engineering Core<br/>Energy · KPI · Diagnostics]
+    CORE --> AI[Single/Multi Agent · Memory · RAG · Evidence Review]
+    AI --> OUT[Analysis · Findings · Recommendations · Research Artifacts]
+    UI[PyQt Desktop] --> EC
+    API[FastAPI / Task Service / Worker] --> EC
+    RES[Research Runner] --> EC
+    EC --> DB[(SQLite / File Storage)]
 ```
 
-The desktop UI only presents state and starts workflows. Services orchestrate reusable domain functions; core modules do not import PyQt. See the concise [architecture notes](docs/architecture.md) for data, persistence, LLM, and safety boundaries.
+Semantic mapping, equipment discovery, KPI calculation, diagnosis rules, YOLO inference, storage, and retrieval remain deterministic services rather than being renamed as Agents. See [architecture and safety boundaries](docs/architecture.md).
 
 ## Quick start
 
-BuildingAI supports Python 3.10+.
+Python 3.10+ is supported.
 
 ```powershell
 git clone https://github.com/KaedeharaT/hvac-ai-analyzer.git
@@ -203,60 +189,25 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-The desktop application works without an LLM. To enable a local open-source LLM, install [Ollama](https://ollama.com/) or use a compatible local endpoint, configure `LLM_MODEL`, and select/test the connection in **Settings**. No model is downloaded or selected by the repository.
-
-### API
+The desktop starts without Ollama, Redis, or a YOLO model. Deterministic analysis remains available; optional features report that their provider/model is not configured. To run the optional API and Redis/RQ adapter dependencies:
 
 ```powershell
 python -m pip install -r requirements-server.txt
 python -m uvicorn building_ai.api.app:app --host 127.0.0.1 --port 8000
 ```
 
-### Build the knowledge base
-
-```powershell
-python scripts/build_knowledge_base.py
-```
-
-The command regenerates curated records, multilingual aliases, portable chunks, the keyword/CJK index, and the configured local SQLite retrieval store. It does not download or commit private building data.
-
-### Tests
+Useful verification commands:
 
 ```powershell
 python -m pytest
+python scripts/run_agentic_evaluation.py
+python scripts/run_multi_agent_evaluation.py
+python scripts/run_agentic_acceptance.py
+python scripts/build_knowledge_base.py
 ```
 
-Public fresh-clone verification: **110 passed, 1 skipped**. The skipped
-research-fixture smoke test is intentional because its private fixture is not
-distributed. The `v1.2.0` release tag retains its recorded **110 passed**
-release verification.
+## Scope and safety
 
-## Project structure
+BuildingAI is an engineering analysis and research platform, not a production BAS controller, CMMS, or substitute for site commissioning. It has no BACnet, Modbus, OPC, or equipment-control write path. Results and recommendations must be checked against the real building before operational changes.
 
-```text
-building_ai/   Desktop UI, services, core analytics, Agent runtime, storage, and API
-knowledge/     Curated source registry, multilingual records, chunks, aliases, and index
-tests/         Unit, integration, UI, security, and evaluation-support tests
-scripts/       Knowledge build, evaluation, acceptance, and screenshot helpers
-docs/          Architecture, source policy, and repository documentation
-```
-
-## Research background and scope
-
-BuildingAI originates from research on automatically interpreting heterogeneous HVAC/BEMS operational data. This repository turns that research direction into a working AI application with a desktop workflow, API boundary, observability, curated knowledge, and evaluation.
-
-It is an engineering platform / research prototype, not a replacement for site commissioning or a production BAS controller. COP, diagnostics, and recommendations must be validated against the actual building before operational changes are made.
-
-## Further reading
-
-- [Chinese README](README_zh.md)
-- [Architecture and boundaries](docs/architecture.md)
-- [Local real-usage evaluation](docs/real_usage_evaluation.md)
-- [Drawing Intelligence boundary](docs/drawing_intelligence.md)
-- [Knowledge source registry and licensing](docs/knowledge_sources.md)
-- [Research-to-product mapping](docs/research_to_product.md)
-- [Migration notes](docs/migration.md)
-
-## License
-
-Code is released under the [MIT License](LICENSE). Third-party knowledge sources retain their original terms; see [docs/knowledge_sources.md](docs/knowledge_sources.md).
+Code is available under the [MIT License](LICENSE). Third-party references retain their own terms; BuildingAI stores compact attributed summaries rather than redistributed paywalled standards or private documents.

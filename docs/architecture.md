@@ -7,14 +7,14 @@ change business logic, but does require rerunning model-dependent evaluation.
 
 ## Boundary
 
-The desktop follows one directional dependency:
+Product and research entry points follow one directional dependency:
 
 ```text
-PyQt UI
+PyQt UI | FastAPI | Headless research scripts
   ↓
-Services (workflow/orchestration)
+Application services (project, task, experiment, Agent runtime)
   ↓
-Core and domain models
+Domain and engineering services (semantic, equipment, energy, diagnosis, drawing)
   ↓
 SQLite/Parquet | LLM provider manager | optional weather service
 ```
@@ -22,6 +22,30 @@ SQLite/Parquet | LLM provider manager | optional weather service
 UI pages render state and initiate services. They do not classify points, assemble LLM
 prompts, or calculate COP. Services coordinate reusable domain functions. Core modules
 do not import PyQt. Storage owns persistence.
+
+## Agent boundary
+
+`AGENT_MODE=single` is the default product runtime and permanent research
+baseline. `AGENT_MODE=multi` selects the optional coordinator-led Multi-Agent
+V1. Both modes call the same read-only project tool registry and deterministic
+domain services.
+
+Multi-Agent specialists have separate allowlists and exchange typed evidence
+packets. The Data Analyst reads project evidence, the HVAC Expert interprets
+supplied evidence without inventing KPI values, the Knowledge specialist
+retrieves general references only, the Drawing specialist reads confirmed
+associations only, and the Reviewer can approve, request evidence, report a
+conflict, or require abstention. Coordinator and specialist activity is stored
+as a parent/child trace. See [multi_agent_architecture.md](multi_agent_architecture.md).
+
+## Research boundary
+
+`building_ai/research/` and `scripts/run_research_*.py` add dataset/GT/split
+provenance, experiment configuration, immutable artifacts, replay, matrices,
+repeated evaluation, trace export, and publication export around the same
+services used by the product. Private datasets, GT, splits, model weights, and
+generated artifacts are not repository inputs. Formal-run requirements are
+defined in [research_protocol.md](research_protocol.md).
 
 ## Vision boundary
 
