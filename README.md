@@ -150,12 +150,12 @@ The repository uses deterministic tests for product, engineering, safety, resear
 
 | Check | Current main result |
 | --- | --- |
-| pytest | **175 passed** |
+| pytest (public fresh clone / CI) | **174 passed, 1 skipped** |
 | Single-Agent deterministic regression | **66 / 66** |
 | Multi-Agent deterministic regression | **66 / 66** |
 | Agentic Acceptance | **26 PASS / 0 FAIL** |
 
-The separate 52-case Local-LLM E2E suite is a **documented internal evaluation**, not a public benchmark and not rerun by GitHub CI. Provider/model changes require a new run; automatic metrics do not claim human-verified hallucination rates.
+The skipped test is an intentional smoke check for a private research fixture that is not distributed. The same candidate records 175 passes when that local fixture is present. The separate 52-case Local-LLM E2E suite is a **documented internal evaluation**, not a public benchmark and not rerun by GitHub CI. Provider/model changes require a new run; automatic metrics do not claim human-verified hallucination rates.
 
 GitHub Actions installs `requirements.txt`, runs the full pytest suite, and runs the deterministic Single-Agent regression on Python 3.10 and 3.11.
 

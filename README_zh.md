@@ -150,12 +150,12 @@ flowchart TD
 
 | 检查 | 当前 main 结果 |
 | --- | --- |
-| pytest | **175 passed** |
+| pytest（公开 fresh clone / CI） | **174 passed，1 skipped** |
 | Single-Agent 确定性回归 | **66 / 66** |
 | Multi-Agent 确定性回归 | **66 / 66** |
 | Agentic Acceptance | **26 PASS / 0 FAIL** |
 
-另有 52-case Local-LLM E2E，它属于**已有记录的内部评测**，不是公开 Benchmark，也不由 GitHub CI 自动运行。更换 Provider 或模型后必须重新评测；自动指标不用于声称经过人工核查的幻觉率。
+被跳过的测试是针对私人科研 fixture 的预留 Smoke；该 fixture 不随仓库分发。本地存在该 fixture 时，同一候选版本为 175 passed。另有 52-case Local-LLM E2E，它属于**已有记录的内部评测**，不是公开 Benchmark，也不由 GitHub CI 自动运行。更换 Provider 或模型后必须重新评测；自动指标不用于声称经过人工核查的幻觉率。
 
 GitHub Actions 在 Python 3.10 和 3.11 上安装 `requirements.txt`，运行完整 pytest，并执行确定性 Single-Agent 回归。
 
