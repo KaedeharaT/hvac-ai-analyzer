@@ -78,10 +78,32 @@ class TimeSeriesChart(QWidget):
             painter.drawText(27, y - 8, 52, 16, Qt.AlignRight | Qt.AlignVCenter, self._number(value))
 
     @staticmethod
-    def _time_label(value: str) -> str:
+    def format_time_label(value: str, resolution: str, scope_start: str | None = None,
+                          scope_end: str | None = None, axis_mode: str | None = None) -> str:
+        if axis_mode == "time_of_day":
+            return str(value)[:5]
         try:
             stamp = pd.Timestamp(value)
-            return stamp.strftime("%H:%M") if stamp.hour or stamp.minute else stamp.strftime("%m-%d")
+            start = pd.Timestamp(scope_start) if scope_start else stamp
+            end = pd.Timestamp(scope_end) if scope_end else stamp
+            crosses_day = start.date() != end.date()
+            crosses_year = start.year != end.year
+            if resolution in {"1min", "10min"}:
+                return stamp.strftime("%m-%d %H:%M" if crosses_day else "%H:%M")
+            if resolution == "1h":
+                if end - start <= pd.Timedelta(days=3):
+                    return stamp.strftime("%m-%d %H:00")
+                return stamp.strftime("%Y-%m-%d" if crosses_year else "%m-%d")
+            if resolution == "1d":
+                return stamp.strftime("%Y-%m-%d" if crosses_year else "%m-%d")
+            if resolution == "1w":
+                iso = stamp.isocalendar()
+                return f"{iso.year}-W{iso.week:02d}"
+            if resolution == "1mo":
+                return stamp.strftime("%Y-%m")
+            if resolution == "1y":
+                return stamp.strftime("%Y")
+            return stamp.strftime("%Y-%m-%d")
         except (TypeError, ValueError):
             return str(value)
 
@@ -91,6 +113,13 @@ class TimeSeriesChart(QWidget):
             return pd.Timestamp(value).strftime("%Y-%m-%d %H:%M")
         except (TypeError, ValueError):
             return value or "—"
+
+    @staticmethod
+    def tick_indexes(point_count: int, plot_width: int) -> list[int]:
+        if point_count <= 0:
+            return []
+        target = min(point_count, max(5, min(10, max(1, plot_width // 110))))
+        return sorted({round(index * (point_count - 1) / max(1, target - 1)) for index in range(target)})
 
     @staticmethod
     def _legend_label(value: str) -> str:
@@ -133,9 +162,12 @@ class TimeSeriesChart(QWidget):
             painter.drawText(legend_x + 19, legend_y, width, 15, Qt.AlignLeft, label)
         first = next((item.get("data", []) for item in series if item.get("data")), [])
         if first:
-            for part in (0, 0.5, 1):
-                index = min(len(first) - 1, int((len(first) - 1) * part)); x = plot.left() + int(plot.width() * part)
-                painter.setPen(QPen(QColor("#64748B"))); painter.drawText(x - 34, plot.bottom() + 3, 68, 16, Qt.AlignHCenter, self._time_label(first[index].get("time", "")))
+            indexes = self.tick_indexes(len(first), plot.width())
+            for index in indexes:
+                part = index / max(1, len(first) - 1); x = plot.left() + int(plot.width() * part)
+                label = self.format_time_label(first[index].get("time", ""), self.payload.get("resolution", "1h"),
+                                               first[0].get("time"), first[-1].get("time"), self.payload.get("axis_mode"))
+                painter.setPen(QPen(QColor("#64748B"))); painter.drawText(x - 53, plot.bottom() + 3, 106, 16, Qt.AlignHCenter, label)
 
     def _draw_bars(self, painter: QPainter, plot) -> None:
         data = self.payload.get("data", []); values = [item.get("value", 0.) for item in data]
@@ -261,20 +293,19 @@ class EnergyAnalysisPage(QWidget):
 
     @staticmethod
     def _resolution_label(result) -> str:
-        if result.aggregation != "auto":
-            return tr({
-                "raw": "energy_aggregation_raw", "5min": "energy_aggregation_5min",
-                "15min": "energy_aggregation_15min", "30min": "energy_aggregation_30min",
-                "hour": "energy_aggregation_hour", "day": "energy_aggregation_day",
-                "week": "energy_aggregation_week", "month": "energy_aggregation_month",
-            }.get(result.aggregation, "energy_aggregation_auto"))
-        automatic = {
-            "5min": tr("energy_aggregation_5min"), "15min": tr("energy_aggregation_15min"),
-            "30min": tr("energy_aggregation_30min"), "h": tr("energy_aggregation_hour"),
-            "D": tr("energy_aggregation_day"), "W": tr("energy_aggregation_week"),
-            "MS": tr("energy_aggregation_month"), None: tr("energy_aggregation_raw"),
-        }.get(result.aggregation_rule, str(result.aggregation_rule or "—"))
-        return tr("energy_auto_resolution", resolution=automatic)
+        return tr({
+            "1min": "energy_aggregation_1min", "10min": "energy_aggregation_10min",
+            "1h": "energy_aggregation_1h", "1d": "energy_aggregation_1d",
+            "1w": "energy_aggregation_1w", "1mo": "energy_aggregation_1mo",
+            "1y": "energy_aggregation_1y",
+        }.get(result.aggregation, "energy_aggregation_1h"))
+
+    @staticmethod
+    def _time_axis_label(result) -> str:
+        return tr({
+            "1d": "energy_axis_date", "1w": "energy_axis_week",
+            "1mo": "energy_axis_month", "1y": "energy_axis_year",
+        }.get(result.aggregation, "energy_axis_time"))
 
     def __init__(self, context):
         super().__init__(); self.context = context; self.i18n = LanguageManager.instance(); self.i18n.language_changed.connect(self.retranslate_ui)
@@ -301,6 +332,7 @@ class EnergyAnalysisPage(QWidget):
         controls.addWidget(self.period_a_label, 3, 0); controls.addWidget(self.period_a_start, 3, 1); controls.addWidget(self.period_a_end, 3, 2)
         controls.addWidget(self.period_b_label, 3, 3); controls.addWidget(self.period_b_start, 3, 4); controls.addWidget(self.period_b_end, 3, 5)
         controls.setColumnStretch(6, 1); self.layout.addLayout(controls)
+        self.resolution_notice = QLabel(); self.resolution_notice.setObjectName("Muted"); self.resolution_notice.setWordWrap(True); self.layout.addWidget(self.resolution_notice)
         self.range.currentIndexChanged.connect(self._range_changed)
         for control in (self.equipment, self.aggregation, self.chart_filter): control.currentIndexChanged.connect(self.refresh)
         for editor in (self.start_time, self.end_time, self.period_a_start, self.period_a_end, self.period_b_start, self.period_b_end): editor.dateTimeChanged.connect(self.refresh)
@@ -334,14 +366,13 @@ class EnergyAnalysisPage(QWidget):
         return editor
 
     def retranslate_ui(self):
-        self.heading.setText(tr("energy_analysis")); current_range = self.range.currentData() or "all"; current_aggregation = self.aggregation.currentData() or "auto"; current_chart = self.chart_filter.currentData() or "all"
+        self.heading.setText(tr("energy_analysis")); current_range = self.range.currentData() or "all"; current_aggregation = self.aggregation.currentData() or "1h"; current_chart = self.chart_filter.currentData() or "all"
         for combo, entries, selected in (
             (self.range, [("all", tr("energy_range_all")), ("24h", tr("energy_range_24h")), ("7d", tr("energy_range_7d")), ("30d", tr("energy_range_30d")), ("custom", tr("energy_range_custom"))], current_range),
-            (self.aggregation, [("auto", tr("energy_aggregation_auto")), ("raw", tr("energy_aggregation_raw")),
-                                ("5min", tr("energy_aggregation_5min")), ("15min", tr("energy_aggregation_15min")),
-                                ("30min", tr("energy_aggregation_30min")), ("hour", tr("energy_aggregation_hour")),
-                                ("day", tr("energy_aggregation_day")), ("week", tr("energy_aggregation_week")),
-                                ("month", tr("energy_aggregation_month"))], current_aggregation),
+            (self.aggregation, [("1min", tr("energy_aggregation_1min")), ("10min", tr("energy_aggregation_10min")),
+                                ("1h", tr("energy_aggregation_1h")), ("1d", tr("energy_aggregation_1d")),
+                                ("1w", tr("energy_aggregation_1w")), ("1mo", tr("energy_aggregation_1mo")),
+                                ("1y", tr("energy_aggregation_1y"))], current_aggregation),
             (self.chart_filter, [("all", tr("energy_chart_all")), *[(code, tr(title)) for code, title, _, _, _ in self.CHARTS]], current_chart),
         ):
             combo.blockSignals(True); combo.clear()
@@ -384,6 +415,27 @@ class EnergyAnalysisPage(QWidget):
         self.start_time.setEnabled(custom); self.end_time.setEnabled(custom)
         enabled = self.compare_enabled.isChecked()
         for widget in (self.period_a_label, self.period_b_label, self.period_a_start, self.period_a_end, self.period_b_start, self.period_b_end): widget.setEnabled(enabled)
+
+    def _configure_resolution_options(self) -> None:
+        bounds = self._dataset_bounds(); native = None
+        if bounds and self.context.dataframe is not None:
+            time_name = self.context.import_metadata.get("time_column")
+            timestamps = pd.to_datetime(self.context.dataframe[time_name], errors="coerce")
+            native = self.context.energy_analysis._interval_minutes(timestamps)
+        first_enabled = -1
+        for index in range(self.aggregation.count()):
+            enabled = self.context.energy_analysis.resolution_supported(self.aggregation.itemData(index), native)
+            item = self.aggregation.model().item(index)
+            if item is not None: item.setEnabled(enabled)
+            if enabled and first_enabled < 0: first_enabled = index
+        current = self.aggregation.currentIndex()
+        current_item = self.aggregation.model().item(current) if current >= 0 else None
+        if current_item is not None and not current_item.isEnabled() and first_enabled >= 0:
+            self.aggregation.blockSignals(True); self.aggregation.setCurrentIndex(first_enabled); self.aggregation.blockSignals(False)
+        if native is None:
+            self.resolution_notice.setText("")
+        else:
+            self.resolution_notice.setText(tr("energy_native_resolution", interval=f"{native:g}"))
 
     def _range_changed(self) -> None:
         self._update_scope_control_state(); self.refresh()
@@ -430,6 +482,7 @@ class EnergyAnalysisPage(QWidget):
     def refresh(self):
         if not hasattr(self, "chart_layout") or self._updating_scope: return
         self._ensure_scope_dates()
+        self._configure_resolution_options()
         self.equipment.blockSignals(True); chosen = self.equipment.currentData(); self.equipment.clear(); self.equipment.addItem(tr("analysis_all_equipment"), None)
         for item in (self.context.equipment_organization.equipment if self.context.equipment_organization else []): self.equipment.addItem(item.name, normalize_equipment_id(item.name) or item.name)
         self.equipment.setCurrentIndex(max(0, self.equipment.findData(chosen))); self.equipment.blockSignals(False)
@@ -479,6 +532,11 @@ class EnergyAnalysisPage(QWidget):
                 continue
             payload = dict(payload)
             payload["x_label"] = tr(x_key); payload["y_label"] = tr(y_key)
+            payload["resolution"] = result.aggregation
+            if code in {"energy_trend", "power_trend", "temperature_trend", "delta_t_trend", "cop_trend"}:
+                payload["x_label"] = self._time_axis_label(result)
+            elif code == "daily_load_profile":
+                payload["axis_mode"] = "time_of_day"
             if code == "temperature_trend":
                 payload["y_label"] = self._temperature_axis_label(payload)
             elif code == "weather_correlation":

@@ -1040,8 +1040,9 @@ class AnalyticsPage(BasePage):
             # A building-total or different-equipment trend is not valid
             # supporting evidence for this equipment-specific finding.
             return {}
-        payload["x_label"] = tr("energy_axis_time")
+        payload["x_label"] = EnergyAnalysisPage._time_axis_label(result)
         payload["y_label"] = tr(y_key)
+        payload["resolution"] = result.aggregation
         return payload
 
     def _render_passed_checks(self, diagnosis, selected):

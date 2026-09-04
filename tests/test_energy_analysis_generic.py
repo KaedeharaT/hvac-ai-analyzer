@@ -72,21 +72,21 @@ def test_resampling_uses_quantity_correct_aggregation_and_scopes_summary():
     ]
     result = EnergyAnalysisService().analyze(
         frame, AnalysisResult(points), "scope", {"time_column": "timestamp"},
-        EquipmentService().organize("scope", points), aggregation="15min",
+        EquipmentService().organize("scope", points), aggregation="10min",
         period_start=timestamps[0], period_end=timestamps[-1],
     )
     power = result.charts["power_trend"]["series"][0]["data"]
     energy = result.charts["energy_trend"]["series"][0]["data"]
     temperature = result.charts["temperature_trend"]["series"][0]["data"]
-    assert [row["value"] for row in power] == [7.0, 22.0]  # mean kW
-    assert [row["value"] for row in energy] == [16.75, 20.5]  # interval kWh summed; includes integrated CH-1 power
-    assert [row["value"] for row in temperature] == [27.0, 42.0]  # mean °C
+    assert [row["value"] for row in power] == [4.5, 14.5, 24.5]  # mean kW
+    assert [row["value"] for row in energy] == pytest.approx([10.75, 12.4166666667, 14.0833333333])
+    assert [row["value"] for row in temperature] == [24.5, 34.5, 44.5]  # mean °C
     assert result.charts["power_trend"]["aggregation_operation"] == "mean"
     assert result.charts["power_trend"]["peak_operation"] == "raw_max"
     assert result.charts["energy_trend"]["aggregation_operation"] == "sum"
     assert result.charts["temperature_trend"]["aggregation_operation"] == "mean"
     assert result.summary["peak_power_kw"] == 29.0  # peak remains a raw maximum
-    assert result.aggregation_rule == "15min"
+    assert result.aggregation_rule == "10min"
 
 
 def test_cumulative_energy_is_differenced_before_custom_period_sum():
@@ -95,18 +95,18 @@ def test_cumulative_energy_is_differenced_before_custom_period_sum():
     points = [_point("Meter", "heat_source_energy", "energy", "kWh", "METER-1")]
     result = EnergyAnalysisService().analyze(
         frame, AnalysisResult(points), "scope", {"time_column": "timestamp"},
-        aggregation="15min", period_start=timestamps[15], period_end=timestamps[29],
+        aggregation="10min", period_start=timestamps[10], period_end=timestamps[29],
     )
-    assert result.summary["total_energy_kwh"] == 15.0
-    assert result.charts["energy_trend"]["series"][0]["data"][0]["value"] == 15.0
+    assert result.summary["total_energy_kwh"] == 20.0
+    assert [row["value"] for row in result.charts["energy_trend"]["series"][0]["data"]] == [10.0, 10.0]
 
 
-def test_raw_resolution_does_not_resample_power():
-    timestamps = pd.date_range("2025-01-01", periods=4, freq="5min")
+def test_one_minute_resolution_preserves_native_one_minute_power():
+    timestamps = pd.date_range("2025-01-01", periods=4, freq="min")
     frame = pd.DataFrame({"timestamp": timestamps, "Power": [10.0, 20.0, 30.0, 40.0]})
     points = [_point("Power", "heat_source_power", "power", "kW", "CH-1")]
-    result = EnergyAnalysisService().analyze(frame, AnalysisResult(points), "raw", {"time_column": "timestamp"}, aggregation="raw")
-    assert result.aggregation_rule is None
+    result = EnergyAnalysisService().analyze(frame, AnalysisResult(points), "native", {"time_column": "timestamp"}, aggregation="1min")
+    assert result.aggregation_rule == "1min"
     assert [row["value"] for row in result.charts["power_trend"]["series"][0]["data"]] == [10.0, 20.0, 30.0, 40.0]
 
 
@@ -122,10 +122,10 @@ def test_cop_resampling_is_mean_and_retains_valid_sample_count():
     ]
     semantics = AnalysisResult(points); organization = EquipmentService().organize("cop", points)
     analytics = AnalyticsService().analyze_project(frame, semantics, "cop", {"time_column": "timestamp"}, organization)
-    result = EnergyAnalysisService().analyze(frame, semantics, "cop", {"time_column": "timestamp"}, organization, analytics, aggregation="15min")
+    result = EnergyAnalysisService().analyze(frame, semantics, "cop", {"time_column": "timestamp"}, organization, analytics, aggregation="10min")
     rows = result.charts["cop_trend"]["series"][0]["data"]
-    assert len(rows) == 2
-    assert all(row["valid_sample_count"] == 15 for row in rows)
+    assert len(rows) == 3
+    assert all(row["valid_sample_count"] == 10 for row in rows)
     assert all(abs(row["value"] - 4.186) < 1e-9 for row in rows)
     assert result.summary["average_cop_valid_sample_count"] == 30
 
@@ -156,25 +156,39 @@ def test_invalid_custom_period_is_rejected():
         raise AssertionError("invalid period must not be accepted")
 
 
-@pytest.mark.parametrize("aggregation, expected_rule, expected_bins", [
-    ("5min", "5min", 576), ("15min", "15min", 192), ("30min", "30min", 96),
-    ("hour", "h", 48), ("day", "D", 2), ("week", "W", 1), ("month", "MS", 1),
+@pytest.mark.parametrize("aggregation, expected_rule, start, periods, frequency, expected_bins", [
+    ("1min", "1min", "2025-01-01", 20, "min", 20),
+    ("10min", "10min", "2025-01-01", 20, "min", 2),
+    ("1h", "h", "2025-01-01", 12, "10min", 2),
+    ("1d", "D", "2025-01-01", 48, "h", 2),
+    ("1w", "W-MON", "2025-01-06", 14, "D", 2),
+    ("1mo", "MS", "2025-01-01", 59, "D", 2),
+    ("1y", "YS", "2024-01-01", 731, "D", 2),
 ])
-def test_every_supported_resolution_changes_the_real_data_bins(aggregation, expected_rule, expected_bins):
-    timestamps = pd.date_range("2025-01-01", periods=2 * 24 * 60, freq="min")
+def test_every_supported_resolution_changes_the_real_data_bins(aggregation, expected_rule, start, periods, frequency, expected_bins):
+    timestamps = pd.date_range(start, periods=periods, freq=frequency)
     frame = pd.DataFrame({"timestamp": timestamps, "Power": [60.0] * len(timestamps)})
     points = [_point("Power", "heat_source_power", "power", "kW", "CH-1")]
     result = EnergyAnalysisService().analyze(frame, AnalysisResult(points), "bins", {"time_column": "timestamp"}, aggregation=aggregation)
     assert result.aggregation_rule == expected_rule
     assert len(result.charts["power_trend"]["series"][0]["data"]) == expected_bins
-    assert abs(result.summary["total_energy_kwh"] - 2880.0) < 1e-9
+    native_minutes = EnergyAnalysisService._interval_minutes(pd.Series(timestamps))
+    assert result.summary["total_energy_kwh"] == pytest.approx(60.0 * periods * native_minutes / 60.0)
+
+
+def test_native_resolution_protection_rejects_upsampling():
+    timestamps = pd.date_range("2025-01-01", periods=12, freq="10min")
+    frame = pd.DataFrame({"timestamp": timestamps, "Power": [10.0] * len(timestamps)})
+    points = [_point("Power", "heat_source_power", "power", "kW", "CH-1")]
+    with pytest.raises(ValueError, match="upsampling is not permitted"):
+        EnergyAnalysisService().analyze(frame, AnalysisResult(points), "native", {"time_column": "timestamp"}, aggregation="1min")
 
 
 def test_coarse_resolution_does_not_create_misleading_time_of_day_charts():
     timestamps = pd.date_range("2025-01-01", periods=3 * 24, freq="h")
     frame = pd.DataFrame({"timestamp": timestamps, "Power": [10.0] * len(timestamps)})
     points = [_point("Power", "heat_source_power", "power", "kW", "CH-1")]
-    result = EnergyAnalysisService().analyze(frame, AnalysisResult(points), "coarse", {"time_column": "timestamp"}, aggregation="day")
+    result = EnergyAnalysisService().analyze(frame, AnalysisResult(points), "coarse", {"time_column": "timestamp"}, aggregation="1d")
     assert "daily_load_profile" not in result.charts
     assert "load_heatmap" not in result.charts
     assert result.capability_details["daily_profile"]["reason"] == "requires_subdaily_resolution"
@@ -188,8 +202,18 @@ def test_weather_scatter_uses_selected_resolution_for_both_axes():
         _point("Outdoor", "other", "temperature", "°C"),
         _point("Power", "heat_source_power", "power", "kW", "CH-1"),
     ]
-    result = EnergyAnalysisService().analyze(frame, AnalysisResult(points), "weather", {"time_column": "timestamp"}, aggregation="30min")
+    result = EnergyAnalysisService().analyze(frame, AnalysisResult(points), "weather", {"time_column": "timestamp"}, aggregation="10min")
     scatter = result.charts["weather_correlation"]
-    assert scatter["sample_count"] == 3
-    assert scatter["aggregation"] == "30min"
-    assert [row["x"] for row in scatter["data"]] == [2.5, 8.5, 14.5]
+    assert scatter["sample_count"] == 9
+    assert scatter["aggregation"] == "10min"
+    assert [row["x"] for row in scatter["data"]] == [0.5, 2.5, 4.5, 6.5, 8.5, 10.5, 12.5, 14.5, 16.5]
+
+
+def test_week_month_and_year_buckets_use_stable_calendar_boundaries():
+    service = EnergyAnalysisService()
+    weekly = pd.Series([1.0, 2.0], index=pd.to_datetime(["2026-08-23", "2026-08-24"]))  # Sunday, Monday
+    assert [row["time"][:10] for row in service._aggregate(weekly, "W-MON")] == ["2026-08-17", "2026-08-24"]
+    monthly = pd.Series([1.0, 2.0], index=pd.to_datetime(["2025-12-31", "2026-01-01"]))
+    assert [row["time"][:10] for row in service._aggregate(monthly, "MS")] == ["2025-12-01", "2026-01-01"]
+    yearly = pd.Series([1.0, 2.0], index=pd.to_datetime(["2025-12-31", "2026-01-01"]))
+    assert [row["time"][:10] for row in service._aggregate(yearly, "YS")] == ["2025-01-01", "2026-01-01"]

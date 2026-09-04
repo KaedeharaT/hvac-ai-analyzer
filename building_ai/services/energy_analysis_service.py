@@ -46,7 +46,7 @@ class EnergyAnalysisResult:
     temperature_series: list[EnergySeries] = field(default_factory=list)
     charts: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
-    aggregation: str = "auto"
+    aggregation: str = "1h"
     aggregation_rule: str | None = None
     equipment_filter: str | None = None
 
@@ -80,8 +80,12 @@ class EnergyAnalysisService:
         "load_heatmap": "heatmap", "equipment_breakdown": "equipment_ranking",
     }
     AGGREGATION_RULES = {
-        "raw": None, "5min": "5min", "15min": "15min", "30min": "30min",
-        "hour": "h", "day": "D", "week": "W", "month": "MS",
+        "1min": "1min", "10min": "10min", "1h": "h", "1d": "D",
+        "1w": "W-MON", "1mo": "MS", "1y": "YS",
+    }
+    RESOLUTION_MINUTES = {
+        "1min": 1.0, "10min": 10.0, "1h": 60.0, "1d": 1440.0,
+        "1w": 10080.0, "1mo": 40320.0, "1y": 525600.0,
     }
 
     def analyze(self, dataframe: pd.DataFrame, semantics: AnalysisResult, project_id: str,
@@ -103,7 +107,7 @@ class EnergyAnalysisService:
         if timestamps is None or scope_timestamps is None or scope_timestamps.empty:
             return EnergyAnalysisResult(project_id, None, None, None, quality, no_capability,
                 self._summary([], [], [], organization), {}, warnings=["timestamp_unavailable"],
-                aggregation=aggregation or "auto", equipment_filter=equipment_filter)
+                aggregation=aggregation or "1h", equipment_filter=equipment_filter)
         names = {item.equipment_id: item.name for item in (organization.equipment if organization else [])}
         energy: list[EnergySeries] = []; power: list[EnergySeries] = []; temperatures: list[EnergySeries] = []; rejected_warnings: list[str] = []
         for point in semantics.semantic_results:
@@ -142,7 +146,7 @@ class EnergyAnalysisService:
         # source hierarchy is unknowable, so summing would double-count.
         direct_owners = {x.equipment_id for x in energy}
         energy_for_charts = [*energy, *[x for x in power if x.equipment_id not in direct_owners]]
-        aggregation_name, rule = self._resolve_aggregation(aggregation, scope_timestamps)
+        aggregation_name, rule = self._resolve_aggregation(aggregation, scope_timestamps, full_interval)
         charts = self._charts(scope_timestamps, energy_for_charts, power, temperatures, analytics,
                               equipment_filter, rule, comparison_periods, all_power)
         details = AnalysisCapabilityDetector().detect(
@@ -150,7 +154,7 @@ class EnergyAnalysisService:
             power_points=len(power), temperature_points=len(temperatures),
             analytics_available=bool(analytics and analytics.available_kpis), quality=quality,
         )
-        if rule in {"D", "W", "MS"} and power:
+        if rule in {"D", "W-MON", "MS", "YS"} and power:
             details.statuses["daily_profile"] = CapabilityStatus(False, "requires_subdaily_resolution")
             details.statuses["heatmap"] = CapabilityStatus(False, "requires_subdaily_resolution")
         capabilities = details.boolean_flags()
@@ -186,13 +190,35 @@ class EnergyAnalysisService:
                             item.energy_kwh.loc[mask] if item.energy_kwh is not None else None,
                             list(item.warnings))
 
-    def _resolve_aggregation(self, aggregation: str | None, timestamps: pd.Series) -> tuple[str, str | None]:
-        name = aggregation or "auto"
-        if name in self.AGGREGATION_RULES:
-            return name, self.AGGREGATION_RULES[name]
-        days = (timestamps.max() - timestamps.min()).total_seconds() / 86400
-        rule = "h" if days <= 3 else "D" if days <= 90 else "W" if days <= 730 else "MS"
-        return "auto", rule
+    def _resolve_aggregation(self, aggregation: str | None, timestamps: pd.Series,
+                             native_interval_minutes: float | None = None) -> tuple[str, str]:
+        name = aggregation
+        if name is None:
+            name = next((candidate for candidate in self.AGGREGATION_RULES
+                         if self.resolution_supported(candidate, native_interval_minutes)), "1y")
+        if name not in self.AGGREGATION_RULES:
+            raise ValueError(f"Unsupported energy aggregation: {name}")
+        if not self.resolution_supported(name, native_interval_minutes):
+            raise ValueError(
+                f"Requested resolution {name} is finer than the native sampling interval "
+                f"({native_interval_minutes:g} min); upsampling is not permitted"
+            )
+        return name, self.AGGREGATION_RULES[name]
+
+    @classmethod
+    def resolution_supported(cls, aggregation: str, native_interval_minutes: float | None) -> bool:
+        """Return whether aggregation can be formed without inventing samples."""
+        if aggregation not in cls.RESOLUTION_MINUTES or native_interval_minutes is None:
+            return aggregation in cls.RESOLUTION_MINUTES
+        requested = cls.RESOLUTION_MINUTES[aggregation]
+        # Calendar buckets have variable duration.  These lower bounds keep a
+        # native monthly/yearly series selectable without allowing it to be
+        # presented as a finer weekly/monthly series.
+        if aggregation == "1mo":
+            return native_interval_minutes <= 31 * 1440
+        if aggregation == "1y":
+            return native_interval_minutes <= 366 * 1440
+        return requested + 1e-9 >= native_interval_minutes
 
     @staticmethod
     def _capability_names() -> tuple[str, ...]:
@@ -277,8 +303,10 @@ class EnergyAnalysisService:
             values = clean
             counts = clean.notna().astype(int)
         else:
-            values = clean.resample(rule).sum(min_count=1) if operation == "sum" else clean.resample(rule).mean()
-            counts = clean.resample(rule).count()
+            kwargs = {"label": "left", "closed": "left"} if rule == "W-MON" else {}
+            grouped = clean.resample(rule, **kwargs)
+            values = grouped.sum(min_count=1) if operation == "sum" else grouped.mean()
+            counts = grouped.count()
         rows = []
         for key, value in values.dropna().items():
             row = {"time": key.isoformat(), "value": float(value)}
@@ -301,8 +329,9 @@ class EnergyAnalysisService:
             if total.notna().any():
                 name = f"{power[0].equipment_name}: Input power" if equipment_filter and power[0].equipment_name else "Building total power"
                 charts["power_trend"] = {"unit": "kW", "aggregation": rule, "aggregation_operation": "mean", "peak_operation": "raw_max", "series": [{"name": name, "data": self._aggregate(total, rule, "mean")}], "peak_kw": float(total.max()), "peak_time": total.idxmax().isoformat(), "average_kw": float(total.mean())}
-                aggregated_power = total if rule is None else total.resample(rule).mean()
-                if rule not in {"D", "W", "MS"}:
+                kwargs = {"label": "left", "closed": "left"} if rule == "W-MON" else {}
+                aggregated_power = total.resample(rule, **kwargs).mean()
+                if rule not in {"D", "W-MON", "MS", "YS"}:
                     profile = aggregated_power.groupby([aggregated_power.index.weekday < 5, aggregated_power.index.strftime("%H:%M")]).mean()
                     charts["daily_load_profile"] = {"unit": "kW", "aggregation": rule, "aggregation_operation": "mean", "series": [{"name": "Weekday" if bool(k) else "Weekend", "data": [{"time": t, "value": float(v)} for (_, t), v in profile[profile.index.get_level_values(0) == k].items()]} for k in sorted(profile.index.get_level_values(0).unique(), reverse=True)]}
                     charts["load_heatmap"] = {"unit": "kW", "aggregation": rule, "aggregation_operation": "mean", "data": [{"date": key[0].isoformat(), "time": key[1], "value": float(value)} for key, value in aggregated_power.groupby([aggregated_power.index.date, aggregated_power.index.strftime("%H:%M")]).mean().items()]}
@@ -321,8 +350,9 @@ class EnergyAnalysisService:
             outdoor = next((x for x in temperatures if any(t in x.name.casefold() for t in ("outdoor", "outside", "外気", "外气", "外温"))), None)
             if outdoor and power:
                 total = pd.concat([x.values for x in power], axis=1).sum(axis=1, min_count=1)
-                outdoor_values = outdoor.values if rule is None else outdoor.values.resample(rule).mean()
-                power_values = total if rule is None else total.resample(rule).mean()
+                kwargs = {"label": "left", "closed": "left"} if rule == "W-MON" else {}
+                outdoor_values = outdoor.values.resample(rule, **kwargs).mean()
+                power_values = total.resample(rule, **kwargs).mean()
                 paired = pd.DataFrame({"temperature": outdoor_values, "power": power_values}).dropna()
                 if len(paired) >= 3: charts["weather_correlation"] = {"x_unit": outdoor.unit or "unknown", "y_unit": "kW", "aggregation": rule, "aggregation_operation": "mean", "sample_count": int(len(paired)), "data": [{"x": float(row.temperature), "y": float(row.power)} for row in paired.iloc[:2000].itertuples()]}
         if analytics:
