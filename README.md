@@ -3,6 +3,8 @@
 Supports Chinese / English / Japanese UI with immediate switching and per-user language preferences.
 Confirmed drawing objects support clickable equipment overlays and structured image-relative pixel position export with source hashes. Calibrated building coordinates and Revit import remain deferred; see [the historical audit](docs/legacy_revit_visualization_audit.md).
 
+The `feature/revit-free-model-viewer` branch additionally provides an optional offline Model Viewer for validated subsets of existing OpenStudio OSM 3.6.1/3.7.0 surface geometry, with manual equipment references and provenance export. It requires no Revit installation; see [supported formats, setup and verification](docs/revit_free_model_viewer.md).
+
 ### Agentic AI Platform for Building Energy Intelligence
 
 Turn heterogeneous BEMS data and building drawings into equipment-aware analytics, diagnostics, and evidence-grounded energy-saving recommendations.

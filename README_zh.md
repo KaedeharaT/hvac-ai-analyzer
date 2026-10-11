@@ -3,6 +3,8 @@
 支持简体中文、English、日本語三语言界面，即时切换并保存用户语言偏好。
 人工确认的图纸对象支持设备叠加显示、点击查看设备，以及含图像哈希的图像相对像素位置导出。真实建筑坐标与 Revit 导入暂缓；详见[历史研究审计](docs/legacy_revit_visualization_audit.md)。
 
+`feature/revit-free-model-viewer` 分支另提供可选的离线模型预览，支持经过验证的 OpenStudio OSM 3.6.1/3.7.0 表面几何子集、人工设备引用及关联依据导出，无需安装 Revit。格式边界、安装方法与验证情况见[模型预览说明](docs/revit_free_model_viewer.md)。
+
 ### 面向建筑能源智能的 Agentic AI 平台
 
 将异构 BEMS 运行数据与建筑图纸统一转化为设备级能源分析、运行诊断和可追溯节能建议。

@@ -15,3 +15,6 @@ addopts = "-ra"
 
 [tool.setuptools.packages.find]
 include = ["building_ai*"]
+
+[tool.setuptools.package-data]
+"building_ai.ui" = ["model_viewer_assets/*.html", "model_viewer_assets/*.js", "model_viewer_assets/*.txt"]

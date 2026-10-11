@@ -1,0 +1,2 @@
+# Optional desktop preview backend. Core BEMS/2D features do not require this.
+PyQtWebEngine>=5.15.4,<6

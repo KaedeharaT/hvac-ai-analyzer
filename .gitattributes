@@ -1,0 +1,3 @@
+# The generated renderer contains verbatim upstream GLSL string whitespace.
+# Review viewer.js and the pinned build inputs; preserve shader text in the bundle.
+building_ai/ui/model_viewer_assets/viewer.bundle.js linguist-generated=true -whitespace

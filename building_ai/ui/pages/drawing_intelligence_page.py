@@ -23,7 +23,7 @@ class DrawingIntelligencePage(QWidget):
         root=QVBoxLayout(self); root.setContentsMargins(24,24,24,24)
         self.title=QLabel(); self.title.setObjectName("PageTitle"); root.addWidget(self.title); self.subtitle=QLabel(); self.subtitle.setObjectName("Muted"); self.subtitle.setWordWrap(True); root.addWidget(self.subtitle)
         self.boundary=QLabel(); self.boundary.setWordWrap(True); root.addWidget(self.boundary)
-        selector=QHBoxLayout(); self.drawing_label=QLabel(); self.drawing_choice=QComboBox(); self.drawing_choice.currentIndexChanged.connect(self.change_drawing); selector.addWidget(self.drawing_label); selector.addWidget(self.drawing_choice,1); self.export_button=QPushButton(); self.export_button.clicked.connect(self.export_positions); selector.addWidget(self.export_button); root.addLayout(selector)
+        selector=QHBoxLayout(); self.drawing_label=QLabel(); self.drawing_choice=QComboBox(); self.drawing_choice.currentIndexChanged.connect(self.change_drawing); selector.addWidget(self.drawing_label); selector.addWidget(self.drawing_choice,1); self.export_button=QPushButton(); self.export_button.clicked.connect(self.export_positions); selector.addWidget(self.export_button); self.preview_button=QPushButton(); self.preview_button.clicked.connect(self.open_model_viewer); selector.addWidget(self.preview_button); root.addLayout(selector)
         bar=QHBoxLayout(); self.import_button=QPushButton(); self.model_button=QPushButton(); self.detect_button=QPushButton(); self.zoom_out=QPushButton("−"); self.fit=QPushButton("Fit"); self.zoom_in=QPushButton("+"); self.model_status=QLabel(); self.model_status.setObjectName("StatusBadge")
         for x in (self.import_button,self.model_button,self.detect_button,self.zoom_out,self.fit,self.zoom_in,self.model_status): bar.addWidget(x)
         bar.addStretch(1); root.addLayout(bar); split=QSplitter(); self.scene=QGraphicsScene(self); self.viewer=DrawingView(self.scene); self.viewer.object_clicked.connect(self.select_object); self.viewer.setDragMode(QGraphicsView.ScrollHandDrag); split.addWidget(self.viewer)
@@ -40,7 +40,7 @@ class DrawingIntelligencePage(QWidget):
                 (self.map_button, "drawing_map"), (self.review_label, "drawing_review_class"),
                 (self.mapping_label, "drawing_association"), (self.open_equipment, "drawing_open_equipment"),
                 (self.evidence_note, "drawing_evidence"), (self.fit, "drawing_fit"),
-                (self.export_button, "drawing_export"), (self.drawing_label, "drawing_select")):
+                (self.preview_button, "model_viewer"), (self.export_button, "drawing_export"), (self.drawing_label, "drawing_select")):
             widget.setText(tr(key))
         self.zoom_in.setToolTip(tr("drawing_zoom_in")); self.zoom_out.setToolTip(tr("drawing_zoom_out"))
         self.refresh()
@@ -59,7 +59,7 @@ class DrawingIntelligencePage(QWidget):
         self.drawing_choice.blockSignals(False)
         registry=DrawingModelRegistry(self.context.settings.drawing_model_path)
         self.model_status.setText(tr("no_project") if not project else tr("drawing_model_ready" if registry.configured() else "drawing_model_missing"))
-        self.export_button.setEnabled(bool(self.drawing)); self.detect_button.setEnabled(bool(self.drawing))
+        self.preview_button.setEnabled(bool(project)); self.export_button.setEnabled(bool(self.drawing)); self.detect_button.setEnabled(bool(self.drawing))
 
     def change_drawing(self):
         drawing=self.drawing_choice.currentData()
@@ -156,3 +156,9 @@ class DrawingIntelligencePage(QWidget):
         return None
     def fit_view(self):
         if self.scene.items():self.viewer.fitInView(self.scene.itemsBoundingRect(),Qt.KeepAspectRatio)
+
+    def open_model_viewer(self):
+        if not self.context.current_project: return
+        from .model_viewer_dialog import ModelViewerDialog
+        self.model_dialog = ModelViewerDialog(self.context, self)
+        self.model_dialog.show()

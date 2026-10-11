@@ -19,6 +19,8 @@ def main() -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         handlers=[logging.StreamHandler(), logging.FileHandler(log_dir / "building_ai.log", encoding="utf-8")],
     )
+    from building_ai.ui.model_viewer_backend import prepare_model_viewer
+    prepare_model_viewer()
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
