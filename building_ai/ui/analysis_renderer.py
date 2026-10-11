@@ -4,6 +4,45 @@ from __future__ import annotations
 from building_ai.i18n import tr
 
 
+def localized_guidance(context):
+    """Render stored recommendations without mutating research/service results."""
+    from dataclasses import replace
+    findings = {f.finding_id: f for f in context.diagnosis_result.findings} if context.diagnosis_result else {}
+    result = []
+    for item in context.user_interpretations:
+        finding = findings.get(item.finding_id)
+        if finding is None:
+            result.append(item)
+            continue
+        prefix = 'guidance_' + finding.finding_type
+        if tr(prefix + '_problem') == prefix + '_problem': prefix = 'guidance_other'
+        actions = []
+        for index in range(10):
+            key = f'{prefix}_action_{index}'
+            value = tr(key)
+            if value == key: break
+            actions.append(value)
+        result.append(replace(item, problem=tr(prefix + '_problem'), explanation=tr(prefix + '_explanation'),
+            actions=tuple(actions), expected_effect=tr(prefix + '_expected_effect'),
+            implementation_difficulty=tr('guidance_difficulty_low_medium' if finding.finding_type == 'low_chilled_water_delta_t' else 'guidance_difficulty_medium')))
+    return result
+
+
+def evidence_text(finding):
+    if not finding.evidence: return tr('analysis_no_evidence')
+    values = finding.evidence[0].metric_value
+    parts = []
+    if isinstance(values, dict):
+        for key, value in list(values.items())[:6]:
+            label = tr('analysis_metric_' + key)
+            if label == 'analysis_metric_' + key: label = key
+            display = f'{value:.1%}' if isinstance(value, float) and 'ratio' in key else f'{value:,.3g}' if isinstance(value, float) else str(value)
+            parts.append(f'{label}: {display}')
+    else: parts.append(str(values))
+    period = finding.affected_period or {}
+    return '; '.join(parts) + f" · n={finding.valid_sample_count} · {period.get('start') or '—'} – {period.get('end') or '—'}"
+
+
 def reason_text(reason: str) -> str:
     if reason.startswith("multiple_candidates:"):
         return tr("analysis_multiple_candidates", field=reason.split(":", 1)[1])

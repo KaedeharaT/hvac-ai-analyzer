@@ -162,7 +162,7 @@ class KnowledgeBasePage(QWidget):
     def _populate_sources(self) -> None:
         self.source_table.setRowCount(len(self._sources))
         for row, source in enumerate(self._sources):
-            values = (source.get("organization", ""), source.get("title", ""), tr("knowledge_country_" + source.get("country", "Global")), self._source_category_text(source), source.get("language", ""))
+            values = (source.get("organization", ""), source.get("title", ""), tr("knowledge_country_" + source.get("country", "Global")), self._source_category_text(source), tr("knowledge_language_" + source.get("language", "Multilingual")))
             for column, value in enumerate(values): self.source_table.setItem(row, column, QTableWidgetItem(value))
         if self._sources and not self.source_table.selectedItems(): self.source_table.selectRow(0)
         if self._sources: self._show_selected_source()

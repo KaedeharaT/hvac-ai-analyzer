@@ -10,6 +10,17 @@ from building_ai.llm.prompts import AGENT_SYSTEM_PROMPT
 from building_ai.core.equipment_identity import normalize_equipment_id
 
 
+def response_language(message: str) -> str:
+    """Explicit answer-language requests take precedence over UI preferences."""
+    for locale, pattern in (
+        ('zh_CN', r'(?:用|使用|请以).{0,4}(?:中文|汉语)|(?:answer|reply|respond)\s+in\s+(?:simplified\s+)?chinese|中国語で'),
+        ('ja_JP', r'日本語で|(?:用|使用).{0,4}日[语文]|(?:answer|reply|respond)\s+in\s+japanese'),
+        ('en_US', r'(?:用|使用).{0,4}英[语文]|英語で|(?:answer|reply|respond)\s+in\s+english'),
+    ):
+        if re.search(pattern, message, re.IGNORECASE): return locale
+    return LanguageManager.instance().language
+
+
 class AgentController:
     def __init__(self, context):
         self.context = context
@@ -17,7 +28,8 @@ class AgentController:
     def answer(self, message: str, tool_event: Callable[[str, str], None] | None = None, llm_event: Callable[[dict], None] | None = None) -> str:
         project = self.context.current_project
         text = message.casefold()
-        chinese = LanguageManager.instance().language == "zh_CN"
+        locale = response_language(message)
+        chinese = locale == "zh_CN"
         identity_question = any(token in text for token in ("你是谁", "你能做什么", "who are you", "what can you do"))
         provider = self.context.llm_manager.get_provider()
         if identity_question:
@@ -25,7 +37,7 @@ class AgentController:
                 try:
                     response = self._generate(provider,
                         "Briefly introduce yourself as BuildingAI's read-only BEMS and HVAC analytics assistant. Do not mention project data status.",
-                        "Answer in Simplified Chinese only." if chinese else "Answer in English only.", llm_event,
+                        "Answer in " + {'zh_CN': 'Simplified Chinese', 'en_US': 'English', 'ja_JP': 'Japanese'}[locale] + ".", llm_event,
                     ).strip()
                     response = re.sub(r"^\s*ABSTAIN\s*[:：-]?\s*", "", response, flags=re.IGNORECASE)
                     if response:
@@ -185,7 +197,7 @@ class AgentController:
     def _general_answer(self, message: str, chinese: bool, provider, engineering: bool, llm_event: Callable[[dict], None] | None = None) -> str:
         """Answer chat and engineering-knowledge questions without tool gating."""
         if provider.is_configured:
-            language = "Simplified Chinese only" if chinese else "English only"
+            language = {'zh_CN': 'Simplified Chinese', 'en_US': 'English', 'ja_JP': 'Japanese'}[response_language(message)]
             scope = (
                 "This is general HVAC/energy engineering knowledge, not a diagnosis of the current project. State that distinction when giving recommendations."
                 if engineering else
@@ -199,6 +211,9 @@ class AgentController:
                     return response
             except Exception:
                 pass
+        if response_language(message) == "ja_JP":
+            from building_ai.i18n.ja_JP import TRANSLATIONS
+            return TRANSLATIONS["agent_model_unavailable_guidance"]
         if engineering:
             return self._general_engineering_fallback(chinese)
         return ("我是 BuildingAI 的 AI 助手。我可以解释软件能力、提供通用 HVAC/能源工程知识，并基于当前项目的真实持久化数据回答设备、能耗、KPI、诊断和节能机会问题。"

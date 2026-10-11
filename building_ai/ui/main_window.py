@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QLocale
 from PyQt5.QtWidgets import (
     QButtonGroup, QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton,
-    QStackedWidget, QVBoxLayout, QWidget, QStyle,
+    QStackedWidget, QVBoxLayout, QWidget, QStyle, QDateTimeEdit,
 )
 
 from building_ai.i18n import LanguageManager, tr
+from building_ai.i18n.manager import LANGUAGES
 
 from .context import ApplicationContext
 from .pages import (
@@ -17,6 +18,7 @@ from .pages.knowledge_page import KnowledgeBasePage
 from .styles import application_stylesheet
 from .theme import SPACING_LG, SPACING_MD, SPACING_SM
 from .components import GlobalContextBar, StatusBadge
+from .fonts import configure_fonts
 
 
 class MainWindow(QMainWindow):
@@ -36,6 +38,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, context: ApplicationContext | None = None):
         super().__init__()
+        configure_fonts()
         self.context = context or ApplicationContext()
         self.i18n = LanguageManager.instance()
         self.i18n.set_language(self.context.settings.language)
@@ -92,7 +95,7 @@ class MainWindow(QMainWindow):
 
     def _build_topbar(self) -> QFrame:
         bar = QFrame(); bar.setObjectName("Topbar"); layout = QHBoxLayout(bar); layout.setContentsMargins(SPACING_LG, SPACING_SM, SPACING_LG, SPACING_SM)
-        words = QVBoxLayout(); words.setSpacing(0); self.page_title = QLabel(); self.page_title.setObjectName("PageTitle"); self.page_subtitle = QLabel(); self.page_subtitle.setObjectName("Muted"); words.addWidget(self.page_title); words.addWidget(self.page_subtitle); layout.addLayout(words)
+        words = QVBoxLayout(); words.setSpacing(0); self.page_title = QLabel(); self.page_title.setObjectName("PageTitle"); self.page_subtitle = QLabel(); self.page_subtitle.setObjectName("Muted"); self.page_subtitle.setWordWrap(True); words.addWidget(self.page_title); words.addWidget(self.page_subtitle); layout.addLayout(words)
         layout.addStretch(1)
         self.project_label = StatusBadge(); layout.addWidget(self.project_label)
         self.data_label = StatusBadge(); layout.addWidget(self.data_label)
@@ -137,7 +140,8 @@ class MainWindow(QMainWindow):
             page.set_context_focus(payload.get("equipment_id"), payload.get("finding_id"), payload.get("prompt"))
 
     def toggle_language(self) -> None:
-        target = "zh_CN" if self.i18n.language == "en_US" else "en_US"
+        locales = [code for code, _ in LANGUAGES]
+        target = locales[(locales.index(self.i18n.language) + 1) % len(locales)]
         self.i18n.set_language(target)
         self.context.settings.language = target
         self.context.settings.save()
@@ -180,9 +184,14 @@ class MainWindow(QMainWindow):
         self.update_status()
 
     def retranslate_ui(self) -> None:
+        for editor in self.findChildren(QDateTimeEdit):
+            editor.setLocale(QLocale(self.i18n.language))
         self.setWindowTitle(tr("app_name"))
         self.app_title.setText(tr("app_name"))
-        self.language_button.setText("中文" if self.i18n.language == "en_US" else "EN")
+        self.language_button.setText(dict(LANGUAGES)[self.i18n.language])
+        self.language_button.setToolTip(tr("language"))
+        self.app_subtitle.setText(tr("sidebar_subtitle"))
+        self.sidebar_hint.setText(tr("sidebar_hint"))
         for label in self.findChildren(QLabel, "SidebarSection"):
             label.setText(tr(label.property("translation_key")))
         for button in self.navigation_buttons:
@@ -192,9 +201,6 @@ class MainWindow(QMainWindow):
         index = self.stack.currentIndex() if hasattr(self, "stack") else 0
         self.page_title.setText(tr(self.NAVIGATION[index][1]))
         self.page_subtitle.setText(tr("page_subtitle_" + self.NAVIGATION[index][1]) if "page_subtitle_" + self.NAVIGATION[index][1] in {"page_subtitle_dashboard", "page_subtitle_energy_analysis", "page_subtitle_analysis", "page_subtitle_knowledge_base"} else "")
-        for page in getattr(self, "pages", []):
-            if hasattr(page, "retranslate_ui"):
-                page.retranslate_ui()
         if hasattr(self, "context_bar"):
             self.context_bar.retranslate_ui(); self.context_bar.update_context(self.context)
         self.statusBar().showMessage(tr("read_only_notice"))

@@ -74,9 +74,10 @@ def application_stylesheet() -> str:
     QTableWidget, QTreeWidget {{ gridline-color: {c['border']}; alternate-background-color: #FAFCFF; }}
     QHeaderView::section {{ background: #F8FAFC; color: #475569; border: 0; border-bottom: 1px solid {c['border']}; padding: 10px 8px; font-weight: 650; }}
     QTableWidget::item {{ padding: 7px; border-bottom: 1px solid #F0F3F7; }} QTableWidget::item:hover {{ background: {c['hover']}; }}
+    QTableWidget::item:selected, QTreeWidget::item:selected, QListWidget::item:selected {{ background: #DFEAFE; color: #10243D; }}
     QTabWidget::pane {{ border: 0; }}
     QTabBar::tab {{ background: transparent; color: {c['muted']}; padding: 8px 14px; border: 0; border-bottom: 2px solid transparent; }}
-    QTabBar::tab:selected {{ color: {c['primary']}; border-bottom-color: {c['primary']}; font-weight: 600; }}
+    QTabBar::tab:selected {{ color: {c['primary']}; border-bottom-color: {c['primary']}; }}
     QProgressBar {{ background: #E2E8F0; border: 0; border-radius: 5px; text-align: center; color: {c['text']}; font-size: 10px; }}
     QProgressBar::chunk {{ background: {c['primary']}; border-radius: 5px; }}
     QStatusBar {{ background: {c['surface']}; border-top: 1px solid {c['border']}; color: {c['muted']}; }}

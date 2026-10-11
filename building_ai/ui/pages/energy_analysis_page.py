@@ -309,6 +309,7 @@ class EnergyAnalysisPage(QWidget):
 
     def __init__(self, context):
         super().__init__(); self.context = context; self.i18n = LanguageManager.instance(); self.i18n.language_changed.connect(self.retranslate_ui)
+        self._cached_result = None
         self._scope_project_id = None
         self._updating_scope = False
         self._scope_error = None
@@ -383,7 +384,10 @@ class EnergyAnalysisPage(QWidget):
         self.compare_enabled.setText(tr("energy_custom_comparison")); self.period_a_label.setText(tr("energy_period_a")); self.period_b_label.setText(tr("energy_period_b"))
         for card in self.cards.values(): card.retranslate_ui()
         for index, (key, _) in enumerate(self.GROUPS): self.section_tabs.setTabText(index, tr(key))
-        self.refresh()
+        for index in range(self.equipment.count()):
+            if self.equipment.itemData(index) is None: self.equipment.setItemText(index, tr("analysis_all_equipment"))
+        self._configure_resolution_options()
+        self._render_result(self._cached_result)
 
     def _dataset_bounds(self):
         if self.context.dataframe is None: return None
@@ -414,7 +418,9 @@ class EnergyAnalysisPage(QWidget):
         custom = self.range.currentData() == "custom"
         self.start_time.setEnabled(custom); self.end_time.setEnabled(custom)
         enabled = self.compare_enabled.isChecked()
-        for widget in (self.period_a_label, self.period_b_label, self.period_a_start, self.period_a_end, self.period_b_start, self.period_b_end): widget.setEnabled(enabled)
+        for widget in (self.period_a_label, self.period_b_label, self.period_a_start, self.period_a_end, self.period_b_start, self.period_b_end):
+            widget.setEnabled(enabled)
+            widget.setVisible(enabled)
 
     def _configure_resolution_options(self) -> None:
         bounds = self._dataset_bounds(); native = None
@@ -487,6 +493,17 @@ class EnergyAnalysisPage(QWidget):
         for item in (self.context.equipment_organization.equipment if self.context.equipment_organization else []): self.equipment.addItem(item.name, normalize_equipment_id(item.name) or item.name)
         self.equipment.setCurrentIndex(max(0, self.equipment.findData(chosen))); self.equipment.blockSignals(False)
         result = self._result()
+        self._cached_result = result
+        if result is not None:
+            self.context.selected_period = self.range.currentData() or "all"
+            self.context.selected_equipment_id = self.equipment.currentData()
+            self.context.energy_analysis_scope = {"start": result.start, "end": result.end, "aggregation": result.aggregation,
+                "aggregation_rule": result.aggregation_rule, "equipment_id": result.equipment_filter, "comparison_periods": self._comparison_periods()}
+            self.context.energy_analysis_view_result = result
+        self._render_result(result)
+
+    def _render_result(self, result):
+        scroll_value = self.scroll.verticalScrollBar().value()
         while self.chart_grid.count():
             child = self.chart_grid.takeAt(0)
             if child.widget(): child.widget().deleteLater()
@@ -494,12 +511,6 @@ class EnergyAnalysisPage(QWidget):
             self.metadata.setText(self._scope_error or tr("energy_no_data")); self.readiness_label.setText(tr("analysis_not_ready"));
             for card in self.cards.values(): card.set_value("—")
             return
-        self.context.selected_period = self.range.currentData() or "all"
-        self.context.selected_equipment_id = self.equipment.currentData()
-        self.context.energy_analysis_scope = {"start": result.start, "end": result.end, "aggregation": result.aggregation,
-                                              "aggregation_rule": result.aggregation_rule, "equipment_id": result.equipment_filter,
-                                              "comparison_periods": self._comparison_periods()}
-        self.context.energy_analysis_view_result = result
         q = result.data_quality; self.metadata.setText(tr("energy_metadata", start=result.start or "—", end=result.end or "—", interval=(f"{result.sampling_interval_minutes:g}" if result.sampling_interval_minutes else "—"), equipment=result.summary["equipment_count"], energy=result.summary["energy_points"], temperature=result.summary["temperature_points"], missing=q["missing_ratio"]))
         summary = result.summary
         self.cards["energy"].set_value("—" if summary["total_energy_kwh"] is None else f"{summary['total_energy_kwh']:,.1f} kWh")
@@ -570,6 +581,8 @@ class EnergyAnalysisPage(QWidget):
             if column:
                 row += 1
             self.chart_grid.addWidget(notice, row, 0, 1, 2)
+
+        self.scroll.verticalScrollBar().setValue(scroll_value)
 
     def apply_global_context(self):
         period_index = self.range.findData(self.context.selected_period)

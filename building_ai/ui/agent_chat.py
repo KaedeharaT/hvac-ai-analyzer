@@ -172,6 +172,8 @@ class AgentProcessCard(QFrame):
         elif any(call.get("tool") == "search_knowledge" for call in calls):
             lines.append(f"○ {tr('agent_knowledge_not_found')}")
         if not lines: lines.append(f"✓ {tr('agent_completed')}")
+        if any(call.get('status') == 'FAILED' for call in self._trace.get('llm_calls', [])):
+            lines.append(f"⚠ {tr('connection_error')}")
         self.steps.setText("\n".join(lines))
 
 

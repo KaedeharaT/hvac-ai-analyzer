@@ -62,7 +62,7 @@ class Settings:
         self.provider = aliases.get(self.provider.strip().lower(), self.provider.strip().lower())
         self.ollama_url = self.ollama_url.rstrip("/")
         self.api_base = self.api_base.rstrip("/")
-        self.language = "zh_CN" if self.language in {"zh", "zh_CN"} else "en_US" if self.language in {"en", "en_US"} else self.language
+        self.language = "zh_CN" if self.language in {"zh", "zh_CN"} else "en_US" if self.language in {"en", "en_US"} else "ja_JP" if self.language in {"ja", "ja_JP"} else "en_US"
         self.task_queue_backend = self.task_queue_backend.strip().lower()
         if self.task_queue_backend not in {"local", "redis"}:
             raise ValueError("TASK_QUEUE_BACKEND must be 'local' or 'redis'")

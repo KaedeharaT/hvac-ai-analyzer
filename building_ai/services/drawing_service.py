@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hashlib, shutil, uuid
+import hashlib, shutil, uuid, json, math
 from datetime import datetime, timezone
 from pathlib import Path
 from building_ai.vision.schemas import DrawingDetection
@@ -15,7 +15,8 @@ class DrawingService:
         if source.suffix.lower() not in ALLOWED_IMAGE_SUFFIXES: raise ValueError("Drawing V1 supports PNG, JPG, and JPEG images.")
         digest = hashlib.sha256(source.read_bytes()).hexdigest(); target = self.root / project_id / "drawings" / f"{digest[:12]}_{source.name}"; target.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(source, target)
         row = {"drawing_id": str(uuid.uuid4()), "project_id": project_id, "file_name": source.name, "file_type": source.suffix.lower().lstrip("."), "page_count": 1, "managed_path": str(target), "model_id": None, "status": "imported", "imported_at": self._now()}
-        with self.database.connect() as c: c.execute("INSERT INTO drawings VALUES (:drawing_id,:project_id,:file_name,:file_type,:page_count,:managed_path,:model_id,:status,:imported_at,'{}')", row)
+        row['payload_json'] = json.dumps({'source_image_hash': digest})
+        with self.database.connect() as c: c.execute("INSERT INTO drawings VALUES (:drawing_id,:project_id,:file_name,:file_type,:page_count,:managed_path,:model_id,:status,:imported_at,:payload_json)", row)
         return row
     def list_drawings(self, project_id: str) -> list[dict]:
         with self.database.connect() as c: return [dict(r) for r in c.execute("SELECT * FROM drawings WHERE project_id=? ORDER BY imported_at DESC", (project_id,))]
@@ -49,6 +50,9 @@ class DrawingService:
             row=c.execute("SELECT review_status FROM drawing_detections WHERE project_id=? AND detection_id=?",(project_id,detection_id)).fetchone()
             if not row: raise KeyError(detection_id)
             if row['review_status']!='confirmed': raise ValueError('Only confirmed detections can be mapped to equipment.')
+            owner=c.execute("SELECT project_id FROM equipment WHERE equipment_id=?",(equipment_id,)).fetchone()
+            if owner and owner['project_id'] != project_id:
+                raise ValueError('Equipment belongs to another project.')
             c.execute("UPDATE drawing_detections SET equipment_id=? WHERE detection_id=?",(equipment_id,detection_id))
     def equipment_location(self, project_id: str, equipment_id: str) -> list[dict]:
         with self.database.connect() as c:return [dict(r) for r in c.execute("SELECT d.file_name,d.drawing_id,x.* FROM drawing_detections x JOIN drawings d ON x.drawing_id=d.drawing_id WHERE x.project_id=? AND x.equipment_id=? AND x.review_status='confirmed'",(project_id,equipment_id))]
@@ -56,3 +60,44 @@ class DrawingService:
         rows=self.list_detections(project_id); counts={}
         for r in rows: counts[r['review_status']]=counts.get(r['review_status'],0)+1
         return {"drawings":len(self.list_drawings(project_id)),"detections":len(rows),"review_status_counts":counts}
+
+    def image_positions(self, project_id: str, drawing_id: str) -> list[dict]:
+        """Confirmed image-space centers only; never an engineering transform.
+
+        Unassociated objects retain a null equipment ID. Rejected/predicted
+        objects are excluded, and no unit, origin or calibration is inferred.
+        """
+        from PIL import Image
+        drawing = self.get_drawing(project_id, drawing_id)
+        source = Path(drawing['managed_path'])
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        original = json.loads(drawing.get('payload_json') or '{}').get('source_image_hash')
+        if original and original != digest:
+            raise ValueError('Source image changed after import; re-import and review it.')
+        with Image.open(source) as image:
+            width, height = image.size
+        records = []
+        for row in self.list_detections(project_id, drawing_id, confirmed_only=True):
+            x1, y1, x2, y2 = (row[key] for key in ('bbox_x1', 'bbox_y1', 'bbox_x2', 'bbox_y2'))
+            if ((width, height) != (row['image_width'], row['image_height'])
+                    or not all(math.isfinite(v) for v in (x1, y1, x2, y2))
+                    or not (0 <= x1 < x2 <= width and 0 <= y1 < y2 <= height)):
+                raise ValueError('Bounding box does not match the original image dimensions.')
+            records.append({
+                'drawing_id': drawing_id, 'object_id': row['detection_id'],
+                'equipment_id': row['equipment_id'], 'coordinate_system': 'image_relative',
+                'x': (x1 + x2) / 2, 'y': (y1 + y2) / 2, 'unit': 'pixel',
+                'origin': 'top_left', 'x_direction': 'right', 'y_direction': 'down',
+                'transform_method': 'bbox_center_no_spatial_calibration',
+                'calibration_reference': None, 'review_status': row['review_status'],
+                'model_id': row['model_id'], 'model_version': None,
+                'source_image_hash': digest, 'image_width': width, 'image_height': height,
+                'bbox_xyxy': [x1, y1, x2, y2],
+                'cv_prediction': row['original_prediction'], 'confidence': row['confidence'],
+                'human_class': row['reviewed_class'],
+            })
+        return records
+
+    def export_image_positions(self, project_id: str, drawing_id: str, destination: str | Path) -> None:
+        records = self.image_positions(project_id, drawing_id)
+        Path(destination).write_text(json.dumps(records, ensure_ascii=False, indent=2, allow_nan=False), encoding='utf-8')

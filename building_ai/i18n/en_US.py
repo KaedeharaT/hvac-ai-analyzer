@@ -116,3 +116,149 @@ TRANSLATIONS = {
     "knowledge_feature_energyplus": "Equipment performance, COP, part-load, and system principles.", "knowledge_feature_femp": "Practical operations, maintenance, and energy-saving checks.", "knowledge_feature_haystack": "BEMS point semantics and equipment tags.", "knowledge_feature_brick": "Equipment, sensor, and system relationships.", "knowledge_feature_japan": "Existing-building energy-saving and ZEB retrofit guidance.", "knowledge_feature_china": "Public-building energy management and efficient operation.",
     "page_subtitle_knowledge_base": "Knowledge for building energy, HVAC operation, maintenance, and energy-saving guidance.",
 }
+
+TRANSLATIONS.update({
+    'sidebar_subtitle': 'Building Energy Intelligence',
+    'sidebar_hint': 'Local-first · Read-only',
+    'drawing_title': 'Drawing & Layout Intelligence',
+    'drawing_boundary': 'Image-relative Position · pixels; no calibrated building coordinates.',
+    'drawing_subtitle': 'CV predictions, human confirmation and equipment associations are separate evidence.',
+    'drawing_import': 'Import Drawing',
+    'drawing_model': 'Choose Model',
+    'drawing_detect': 'Run Detection',
+    'drawing_confirm': 'Confirm',
+    'drawing_reject': 'Reject',
+    'drawing_map': 'Save Association',
+    'drawing_review_class': 'Human review class',
+    'drawing_association': 'Confirmed equipment association',
+    'drawing_open_equipment': 'Open Equipment Detail',
+    'drawing_evidence': 'Operating indicators come from BEMS analysis, not from the drawing detector.',
+    'drawing_model_ready': 'Drawing detector · Ready',
+    'drawing_model_missing': 'Drawing model not configured',
+    'drawing_empty': 'No detections',
+    'drawing_fit': 'Fit to view',
+    'drawing_zoom_in': 'Zoom in',
+    'drawing_zoom_out': 'Zoom out',
+    'drawing_export': 'Export image positions',
+    'drawing_export_saved': 'Image-relative positions exported.',
+    'drawing_error': 'Drawing operation failed',
+    'drawing_failure': 'The operation could not be completed. Details: {detail}',
+    'drawing_images': 'Images (*.png *.jpg *.jpeg)',
+    'drawing_weights': 'YOLO weights (*.pt)',
+    'drawing_prediction': 'CV prediction',
+    'drawing_confirmed': 'Human confirmed',
+    'drawing_rejected': 'Rejected',
+    'drawing_unknown_equipment': 'No equipment association',
+    'drawing_choose_equipment': 'Select equipment explicitly',
+    'drawing_position': 'Image position: ({x}, {y}) px',
+    'drawing_no_diagnosis': 'No analysis for this equipment',
+    'drawing_attention': 'Needs attention',
+    'drawing_no_finding': 'No active finding',
+    'drawing_select': 'Drawing',
+    'validation_valid': 'Valid',
+    'validation_check': 'Check',
+    'status_predicted': 'Predicted',
+    'status_confirmed': 'Confirmed',
+    'status_rejected': 'Rejected',
+    'status_human_confirmed': 'Human confirmed',
+    'status_unreviewed': 'Not reviewed',
+    'status_accepted': 'Accepted',
+    'status_review': 'Review required',
+    'status_abstain': 'Abstained',
+    'source_engineering_offline': 'Engineering rules',
+    'source_human': 'Human review',
+    'analysis_metric_occurrence_count': 'Occurrences',
+    'analysis_metric_sample_count': 'Samples',
+    'analysis_metric_power_mean_kw': 'Mean power (kW)',
+    'analysis_metric_mean_power_kw': 'Mean power (kW)',
+    'analysis_metric_mean_cop': 'Mean COP',
+    'analysis_metric_mean_delta_t_c': 'Mean ΔT (°C)',
+    'analysis_metric_off_hour_samples': 'Off-hour samples',
+    'analysis_metric_off_hour_ratio': 'Off-hour ratio',
+    'analysis_metric_start_count': 'Start count',
+    'analysis_metric_low_load_ratio': 'Low-load ratio',
+    'analysis_no_evidence': 'No supporting metric was recorded.',
+    'check_low_heat_source_cop': 'COP',
+    'check_low_chilled_water_delta_t': 'Chilled-water ΔT',
+    'check_off_hour_operation': 'Off-hour operation',
+    'check_low_load_high_power': 'Low-load / high-power operation',
+})
+
+TRANSLATIONS.update({'guidance_low_chilled_water_delta_t_problem': 'Chilled-water utilization is low',
+ 'guidance_low_chilled_water_delta_t_explanation': 'The supply-to-return water temperature difference is '
+                                                   'often small during operation. Water flow may not match '
+                                                   'demand, or bypass, valve, or terminal heat-transfer '
+                                                   'conditions may contribute.',
+ 'guidance_low_chilled_water_delta_t_action_0': 'First check whether chilled-water pump speed is '
+                                                'persistently high.',
+ 'guidance_low_chilled_water_delta_t_action_1': 'Check bypass opening and terminal-valve operation.',
+ 'guidance_low_chilled_water_delta_t_action_2': 'Only after confirming comfort, make a small flow reduction '
+                                                'and observe ΔT, room temperature, and plant power.',
+ 'guidance_low_chilled_water_delta_t_action_3': 'Inspect filters, coils, and terminal heat-transfer '
+                                                'equipment for fouling or insufficient heat transfer.',
+ 'guidance_low_chilled_water_delta_t_expected_effect': 'May reduce pump energy and improve plant efficiency; '
+                                                       'site verification is required.',
+ 'guidance_low_heat_source_cop_problem': 'Equipment efficiency is low',
+ 'guidance_low_heat_source_cop_explanation': 'The equipment uses relatively high input power during valid '
+                                             'operation.',
+ 'guidance_low_heat_source_cop_action_0': 'Inspect heat-exchanger cleanliness, heat-rejection conditions, '
+                                          'and setpoints.',
+ 'guidance_low_heat_source_cop_action_1': 'Check the number and staging order of units running at low load.',
+ 'guidance_low_heat_source_cop_action_2': 'Make only small setpoint changes and observe comfort and power.',
+ 'guidance_low_heat_source_cop_expected_effect': 'May improve equipment efficiency and reduce avoidable '
+                                                 'power use; site verification is required.',
+ 'guidance_off_hour_operation_problem': 'Operation outside the configured schedule',
+ 'guidance_off_hour_operation_explanation': 'Positive equipment power was measured outside the configured '
+                                            'operating hours.',
+ 'guidance_off_hour_operation_action_0': 'Verify schedules, holidays, and manual overrides first.',
+ 'guidance_off_hour_operation_action_1': 'After confirming there is no required load, review the shutdown '
+                                         'sequence.',
+ 'guidance_off_hour_operation_expected_effect': 'May reduce avoidable runtime and energy use; site '
+                                                'verification is required.',
+ 'guidance_low_load_high_power_problem': 'Power use is high at low load',
+ 'guidance_low_load_high_power_explanation': 'Measured power remains high while calculated load is low; '
+                                             'staging or control may not match demand.',
+ 'guidance_low_load_high_power_action_0': 'Check the number of operating units and minimum-load limits.',
+ 'guidance_low_load_high_power_action_1': 'After site verification, review staging, variable-speed control, '
+                                          'and start/stop sequencing.',
+ 'guidance_low_load_high_power_expected_effect': 'May reduce inefficient low-load operation; site '
+                                                 'verification is required.',
+ 'guidance_frequent_start_stop_problem': 'Equipment starts and stops frequently',
+ 'guidance_frequent_start_stop_explanation': 'Repeated start/stop events may increase wear and reduce '
+                                             'operating stability.',
+ 'guidance_frequent_start_stop_action_0': 'Check minimum run/off times and control deadbands.',
+ 'guidance_frequent_start_stop_action_1': 'Check sensor stability and staging logic.',
+ 'guidance_frequent_start_stop_expected_effect': 'May reduce equipment wear and improve stability; site '
+                                                 'verification is required.',
+ 'guidance_parallel_heat_source_operation_problem': 'Parallel equipment operation needs review',
+ 'guidance_parallel_heat_source_operation_explanation': 'Parallel operation is not inherently a fault; '
+                                                        'measured load and staging intent should be checked.',
+ 'guidance_parallel_heat_source_operation_action_0': 'Verify total load, redundancy requirements, and '
+                                                     'equipment capacity.',
+ 'guidance_parallel_heat_source_operation_action_1': 'Only after site confirmation, review staging and '
+                                                     'start/stop sequencing.',
+ 'guidance_parallel_heat_source_operation_expected_effect': 'May avoid unnecessary parallel operation; site '
+                                                            'verification is required.',
+ 'guidance_other_problem': 'Operation needs attention',
+ 'guidance_other_explanation': 'A measured operating condition requires site review.',
+ 'guidance_other_action_0': 'Verify the related signals, equipment state, and site operating conditions.',
+ 'guidance_other_expected_effect': 'Requires site verification.',
+ 'guidance_difficulty_medium': 'Medium',
+ 'guidance_difficulty_low_medium': 'Low–medium'})
+
+TRANSLATIONS["data_file_filter"] = 'Data (*.csv *.xlsx *.xls)'
+
+TRANSLATIONS.update({
+'equipment_type_heat_source': 'Heat Source',
+'equipment_type_chiller': 'Chiller',
+'equipment_type_heat_pump': 'Heat Pump',
+'equipment_type_ahu': 'AHU',
+'equipment_type_fcu': 'FCU',
+'equipment_type_pump': 'Pump',
+'equipment_type_fan': 'Fan',
+'equipment_type_unknown': 'Unknown',
+})
+
+TRANSLATIONS["agent_model_unavailable_guidance"] = 'The model response is unavailable. The following is general HVAC guidance, not a diagnosis of this project. Verify supply/return temperatures, flow, valve operation and heat-exchanger condition before making any adjustments.'
+
+TRANSLATIONS["finding_investigation_prompt"] = 'Why does {equipment} have this finding, what project evidence supports it, and what should I inspect first?'
