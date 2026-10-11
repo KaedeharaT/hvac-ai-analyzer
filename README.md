@@ -1,5 +1,8 @@
 # BuildingAI
 
+Supports Chinese / English / Japanese UI with immediate switching and per-user language preferences.
+Confirmed drawing objects support clickable equipment overlays and structured image-relative pixel position export with source hashes. Calibrated building coordinates and Revit import remain deferred; see [the historical audit](docs/legacy_revit_visualization_audit.md).
+
 ### Agentic AI Platform for Building Energy Intelligence
 
 Turn heterogeneous BEMS data and building drawings into equipment-aware analytics, diagnostics, and evidence-grounded energy-saving recommendations.
