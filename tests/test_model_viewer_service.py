@@ -98,6 +98,31 @@ def test_tampered_model_and_unsupported_formats(models):
     with pytest.raises(ValueError,match="changed"): service.load(a.project_id,mid)
 
 
+def test_manifest_cannot_override_source_geometry_or_engineering_claims(models):
+    service, project, _, source, *_ = models
+    model = service.import_model(project.project_id, source)
+    manifest = service.root / project.project_id / "models" / model["model_id"] / "manifest.json"
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    payload.update(unit="feet", elements=[], model_hash="fake", engineering_validation="verified_as_built")
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+    loaded = service.load(project.project_id, model["model_id"])
+    assert loaded == model
+
+
+def test_reviews_copied_from_another_project_are_rejected(models):
+    service, a, b, source, equipment_a, equipment_b = models
+    mid = service.import_model(a.project_id, source)["model_id"]
+    service.import_model(b.project_id, source)
+    service.associate(a.project_id, mid, "surface", equipment_a, "QA", "Synthetic reference")
+    foreign = service.root / a.project_id / "models" / mid / "associations.json"
+    target = service.root / b.project_id / "models" / mid / "associations.json"
+    target.write_bytes(foreign.read_bytes())
+    with pytest.raises(ValueError, match="provenance mismatch"):
+        service.associations(b.project_id, mid)
+    with pytest.raises(ValueError, match="provenance mismatch"):
+        service.associate(b.project_id, mid, "surface", equipment_b, "QA", "New reference")
+
+
 def test_optional_viewer_is_not_imported_with_main_window():
     # Importing the UI must not require an optional renderer or a Revit installation.
     import subprocess,sys

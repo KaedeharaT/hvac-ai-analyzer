@@ -45,6 +45,7 @@ class ModelViewerDialog(QDialog):
         self.service = ModelViewerService(context.database, context.settings.timeseries_dir)
         self.model = None; self.web_ready = False; self.web_error = None; self.view = None
         self.resize(1180, 760); self.setModal(True)
+        self.setAttribute(Qt.WA_DeleteOnClose)
         layout = QVBoxLayout(self)
         self.boundary = QLabel(); self.boundary.setWordWrap(True); layout.addWidget(self.boundary)
         bar = QHBoxLayout(); self.models = QComboBox(); bar.addWidget(self.models, 1)
@@ -153,11 +154,13 @@ class ModelViewerDialog(QDialog):
 
     def load_selected_model(self):
         model_id = self.models.currentData()
-        if not model_id: self.model = None; self.retranslate_ui(); return
+        self.clear_model()
+        if not model_id: self.retranslate_ui(); return
         try:
-            self.check_project(); self.model = self.service.load(self.project_id, model_id)
-            self.events = self.service.associations(self.project_id, model_id)
+            self.check_project(); model = self.service.load(self.project_id, model_id)
+            events = self.service.associations(self.project_id, model_id)
         except (OSError, ValueError, KeyError) as exc: self.error(exc); return
+        self.model, self.events = model, events
         self.objects.blockSignals(True); self.objects.clear()
         for element in self.model["elements"]:
             item = QListWidgetItem(element["name"]); item.setData(Qt.UserRole, element["object_id"]); self.objects.addItem(item)
@@ -168,6 +171,13 @@ class ModelViewerDialog(QDialog):
             item.setCheckState(Qt.Checked); self.categories.addItem(item)
         self.categories.blockSignals(False)
         self.retranslate_ui(); self.render_model()
+
+    def clear_model(self):
+        self.model = None; self.events = []
+        for widget in (self.objects, self.categories):
+            widget.blockSignals(True); widget.clear(); widget.blockSignals(False)
+        self.js("window.viewer.clear()")
+        self.show_object(); self.update_status()
 
     def render_model(self):
         if self.web_ready and self.model:

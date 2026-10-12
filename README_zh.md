@@ -1,9 +1,9 @@
 # BuildingAI
 
 支持简体中文、English、日本語三语言界面，即时切换并保存用户语言偏好。
-人工确认的图纸对象支持设备叠加显示、点击查看设备，以及含图像哈希的图像相对像素位置导出。真实建筑坐标与 Revit 导入暂缓；详见[历史研究审计](docs/legacy_revit_visualization_audit.md)。
+人工确认的图纸对象支持设备叠加显示、点击查看设备，以及含图像哈希的图像相对像素位置导出。图像到建筑坐标的标定及 Revit 导入仍不在支持范围内；详见[历史研究审计](docs/legacy_revit_visualization_audit.md)。
 
-`feature/revit-free-model-viewer` 分支另提供可选的离线模型预览，支持经过验证的 OpenStudio OSM 3.6.1/3.7.0 表面几何子集、人工设备引用及关联依据导出，无需安装 Revit。格式边界、安装方法与验证情况见[模型预览说明](docs/revit_free_model_viewer.md)。
+平台提供可选的离线模型预览，支持经过验证的 OpenStudio OSM 3.6.1/3.7.0 表面几何子集、人工设备引用及关联依据导出，无需安装 Revit。格式边界、安装方法与验证情况见[模型预览说明](docs/revit_free_model_viewer.md)。
 
 ### 面向建筑能源智能的 Agentic AI 平台
 
@@ -103,6 +103,16 @@ AI Assistant 会继承当前项目、设备、页面和诊断发现上下文，�
 
 *合成演示图纸和测试检测结果；不包含私人图纸或模型权重。*
 
+### 可选模型预览
+
+从**图纸智能识别 → 模型预览**打开受支持的 OSM 表面模型，可旋转、缩放、平移、选择构件及按类别显隐。界面显示以米为单位的模型局部坐标，并通过人工确认引用查看现有设备点位、COP、ΔT 和诊断发现。设备引用不代表设备安装坐标。
+
+![可选模型预览](docs/images/model-viewer.png)
+
+*真实桌面窗口截图，使用合成 OSM 几何与合成 BEMS。设备引用仅用于软件演示，不构成安装位置证据；未公开私人模型或工程数据。*
+
+安装 `requirements-model-viewer.txt` 并重新打开软件，即可启用可选 QtWebEngine 后端。随软件提供的 Three.js 资源离线加载；没有该依赖或没有模型时，核心 BEMS 分析和二维图纸功能仍可使用。当前支持空间原点和旋转均为零的模型，仅预览表面几何，不提供完整 BIM 或 RVT 读取。详见[坐标边界与 GUI 复现方法](docs/revit_free_model_viewer.md)及[第三方依赖清单](docs/model_viewer_third_party.md)。
+
 ### 可搜索知识库
 
 仓库包含来自中国、美国、日本以及 BuildingAI 原创多语言工程整理的 **19 个可追溯来源**和 **154 个精选知识片段**。检索保留中文 / English / 日本語，并返回来源信息与链接。
@@ -151,16 +161,16 @@ flowchart TD
 
 ## 验证
 
-仓库使用确定性测试覆盖产品、工程计算、安全边界、科研 Provenance、Single-Agent 和 Multi-Agent。下列数字来自本次主线候选的重新验证：
+仓库使用确定性测试覆盖产品、工程计算、安全边界、科研 Provenance、Single-Agent 和 Multi-Agent。主线候选已重新验证，公开测试的准确数量见下方 CI 日志：
 
 | 检查 | 当前 main 结果 |
 | --- | --- |
-| pytest（公开 fresh clone / CI） | **174 passed，1 skipped** |
+| pytest（公开 fresh clone / CI） | **PASS** — [当前 CI 日志](https://github.com/KaedeharaT/hvac-ai-analyzer/actions/workflows/ci.yml) |
 | Single-Agent 确定性回归 | **66 / 66** |
 | Multi-Agent 确定性回归 | **66 / 66** |
 | Agentic Acceptance | **26 PASS / 0 FAIL** |
 
-被跳过的测试是针对私人科研 fixture 的预留 Smoke；该 fixture 不随仓库分发。本地存在该 fixture 时，同一候选版本为 175 passed。另有 52-case Local-LLM E2E，它属于**已有记录的内部评测**，不是公开 Benchmark，也不由 GitHub CI 自动运行。更换 Provider 或模型后必须重新评测；自动指标不用于声称经过人工核查的幻觉率。
+其中一项 Smoke 仅在私人科研 fixture 存在时运行；公开仓库不分发该 fixture，因此会跳过此项。另有 52-case Local-LLM E2E，它属于**已有记录的内部评测**，不是公开 Benchmark，也不由 GitHub CI 自动运行。更换 Provider 或模型后必须重新评测；自动指标不用于声称经过人工核查的幻觉率。
 
 GitHub Actions 在 Python 3.10 和 3.11 上安装 `requirements.txt`，运行完整 pytest，并执行确定性 Single-Agent 回归。
 

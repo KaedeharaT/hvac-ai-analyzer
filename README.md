@@ -1,9 +1,9 @@
 # BuildingAI
 
 Supports Chinese / English / Japanese UI with immediate switching and per-user language preferences.
-Confirmed drawing objects support clickable equipment overlays and structured image-relative pixel position export with source hashes. Calibrated building coordinates and Revit import remain deferred; see [the historical audit](docs/legacy_revit_visualization_audit.md).
+Confirmed drawing objects support clickable equipment overlays and structured image-relative pixel position export with source hashes. Image-to-building coordinate calibration and Revit import remain outside the supported scope; see [the historical audit](docs/legacy_revit_visualization_audit.md).
 
-The `feature/revit-free-model-viewer` branch additionally provides an optional offline Model Viewer for validated subsets of existing OpenStudio OSM 3.6.1/3.7.0 surface geometry, with manual equipment references and provenance export. It requires no Revit installation; see [supported formats, setup and verification](docs/revit_free_model_viewer.md).
+An optional offline Model Viewer displays a validated subset of existing OpenStudio OSM 3.6.1/3.7.0 surface geometry, with manual equipment references and provenance export. It requires no Revit installation; see [supported formats, setup and verification](docs/revit_free_model_viewer.md).
 
 ### Agentic AI Platform for Building Energy Intelligence
 
@@ -103,6 +103,16 @@ Bounding boxes and confidence values remain AI predictions until a person confir
 
 *Synthetic demonstration drawing and test detector output; no private drawing or model weight is included.*
 
+### Optional Model Viewer
+
+Open **Drawing Intelligence → Model Viewer** to inspect supported OSM surfaces, rotate, zoom, pan, select objects and filter categories. The viewer shows model-local coordinates in metres and supports manually reviewed references to existing equipment signals, COP, ΔT and findings. Equipment references do not establish installation coordinates.
+
+![Optional Model Viewer](docs/images/model-viewer.png)
+
+*Actual desktop capture with synthetic OSM geometry and synthetic BEMS. The equipment reference is a software demonstration, not installation evidence. No private model or engineering data is published.*
+
+Install `requirements-model-viewer.txt` to enable the optional QtWebEngine backend, then reopen the application. The bundled Three.js renderer loads offline; without the backend or a model, core BEMS analysis and 2D drawings remain available. Supported models have zero space origins/rotations; this is a surface preview, not a complete BIM or RVT reader. See [coordinate boundaries and reproducible GUI checks](docs/revit_free_model_viewer.md) and the [third-party inventory](docs/model_viewer_third_party.md).
+
 ### Searchable Knowledge Base
 
 The repository contains **19 attributed sources** and **154 curated chunks** from China, the United States, Japan, and a small original multilingual engineering synthesis. Search preserves 中文 / English / 日本語 and returns source metadata and URLs.
@@ -151,16 +161,16 @@ Private datasets, annotations, splits, weights, and generated experiment artifac
 
 ## Evaluation
 
-The repository uses deterministic tests for product, engineering, safety, research provenance, Single-Agent, and Multi-Agent behavior. The current candidate was revalidated before publication; the exact pytest total and regression results below correspond to this main revision.
+The repository uses deterministic tests for product, engineering, safety, research provenance, Single-Agent, and Multi-Agent behavior. The main candidate was revalidated before publication; exact public pytest counts are recorded in the linked CI run.
 
 | Check | Current main result |
 | --- | --- |
-| pytest (public fresh clone / CI) | **174 passed, 1 skipped** |
+| pytest (public fresh clone / CI) | **PASS** — [current CI logs](https://github.com/KaedeharaT/hvac-ai-analyzer/actions/workflows/ci.yml) |
 | Single-Agent deterministic regression | **66 / 66** |
 | Multi-Agent deterministic regression | **66 / 66** |
 | Agentic Acceptance | **26 PASS / 0 FAIL** |
 
-The skipped test is an intentional smoke check for a private research fixture that is not distributed. The same candidate records 175 passes when that local fixture is present. The separate 52-case Local-LLM E2E suite is a **documented internal evaluation**, not a public benchmark and not rerun by GitHub CI. Provider/model changes require a new run; automatic metrics do not claim human-verified hallucination rates.
+One smoke check uses a private research fixture and runs only when that fixture is present; public clones skip it. The separate 52-case Local-LLM E2E suite is a **documented internal evaluation**, not a public benchmark and not rerun by GitHub CI. Provider/model changes require a new run; automatic metrics do not claim human-verified hallucination rates.
 
 GitHub Actions installs `requirements.txt`, runs the full pytest suite, and runs the deterministic Single-Agent regression on Python 3.10 and 3.11.
 

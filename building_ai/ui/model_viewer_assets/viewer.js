@@ -18,9 +18,13 @@ function reset() {
   camera.position.set(size*1.25,-size*1.4,size*1.1);
   camera.near=size/10000; camera.far=size*1000; camera.updateProjectionMatrix(); controls.update();
 }
-function load(payload) {
-  model=payload;
+function clear() {
   if(group){scene.remove(group); group.traverse(x=>{x.geometry?.dispose();x.material?.dispose();});}
+  group=null; selected=null; bounds=null; model=null;
+  window.viewerState={ready:true,elements:0};
+}
+function load(payload) {
+  clear(); model=payload;
   group=new THREE.Group(); selected=null;
   bounds=new THREE.Box3(new THREE.Vector3(...payload.bounds[0]),new THREE.Vector3(...payload.bounds[1]));
   const center=bounds.getCenter(new THREE.Vector3());
@@ -43,7 +47,7 @@ function load(payload) {
   scene.add(group); reset();
   window.viewerState={ready:true,elements:payload.elements.length,unit:payload.unit};
 }
-window.viewer={load,reset,select:choose,
+window.viewer={load,clear,reset,select:choose,
   showCategory:(category,visible)=>group?.children.forEach(x=>{if(x.userData.category===category)x.visible=visible;}),
   state:()=>({elements:group?.children.length||0,visible:group?.children.filter(x=>x.visible).length||0,
     selected:selected?.userData.id||null,position:camera?.position.toArray(),target:controls?.target.toArray(),unit:model?.unit}),

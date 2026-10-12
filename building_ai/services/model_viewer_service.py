@@ -70,12 +70,32 @@ class ModelViewerService:
         data = source.read_bytes()
         if hashlib.sha256(data).hexdigest() != model_id:
             raise ValueError("Model snapshot changed; import and review it again")
-        return {**read_osm(data), **manifest}
+        # Only import metadata comes from the manifest. Units, geometry and
+        # validation claims must always come from the checked source adapter.
+        metadata = {key: manifest[key] for key in
+                    ("project_id", "model_id", "source_name", "imported_at")}
+        return {**metadata, **read_osm(data)}
 
     def associations(self, project_id: str, model_id: str) -> list[dict]:
-        self.load(project_id, model_id)
+        model = self.load(project_id, model_id)
         path = self._model_dir(project_id, model_id) / "associations.json"
-        return json.loads(path.read_text(encoding="utf-8"))["events"]
+        events = json.loads(path.read_text(encoding="utf-8"))["events"]
+        object_ids = {element["object_id"] for element in model["elements"]}
+        expected = {"project_id": project_id, "model_hash": model_id,
+                    "association_kind": "reference_only_not_equipment_position",
+                    "review_status": "human_confirmed", "drawing_hash": None,
+                    "unit": model["unit"], "coordinate_system": model["coordinate_system"],
+                    "transform_method": model["transform_method"]}
+        if not isinstance(events, list) or any(
+            not isinstance(event, dict)
+            or any(key not in event or event[key] != value for key, value in expected.items())
+            or event.get("object_id") not in object_ids
+            or any(not isinstance(event.get(key), str) or not event[key].strip()
+                   for key in ("equipment_id", "reviewer", "note", "confirmed_at"))
+            for event in events
+        ):
+            raise ValueError("Project model association provenance mismatch")
+        return events
 
     def associate(self, project_id: str, model_id: str, object_id: str,
                   equipment_id: str, reviewer: str, note: str) -> dict:
@@ -95,7 +115,7 @@ class ModelViewerService:
             "coordinate_system": model["coordinate_system"], "unit": model["unit"],
             "transform_method": model["transform_method"], "drawing_hash": None}
         path = self._model_dir(project_id, model_id) / "associations.json"
-        data = json.loads(path.read_text(encoding="utf-8")); data["events"].append(event)
+        data = {"events": self.associations(project_id, model_id) + [event]}
         _write(path, data)
         return event
 

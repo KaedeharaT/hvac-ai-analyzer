@@ -57,6 +57,9 @@ def main():
     assert viewer.web_ready and not viewer.web_error,viewer.web_error
     def js(code):
         received=[]; viewer.page.runJavaScript(code,received.append); until(lambda:bool(received),10); return received[0]
+    assert viewer.profile.isOffTheRecord()
+    js("window.qaNetworkBlocked=false;fetch('https://example.invalid/buildingai-offline-check').catch(()=>window.qaNetworkBlocked=true);null")
+    until(lambda:js('window.qaNetworkBlocked') is True)
     if not args.reopen:
         assert viewer.model is None
         assert viewer.status.text()==tr('model_empty')
@@ -109,7 +112,7 @@ def main():
     category.setCheckState(Qt.Unchecked); events(); assert js('window.viewer.state().visible')<total
     category.setCheckState(Qt.Checked); events(); assert js('window.viewer.state().visible')==total
     viewer.equipment.setCurrentIndex(1); viewer.reviewer.setText('Synthetic GUI QA')
-    viewer.note.setText('Software test reference only; not a historical equipment installation claim.')
+    viewer.note.setText('Synthetic QA reference; no installation claim.')
     viewer.side_scroll.ensureWidgetVisible(viewer.confirm_button); events()
     QTest.mouseClick(viewer.confirm_button,Qt.LeftButton); events()
     assert viewer.current_association(),errors
@@ -136,6 +139,23 @@ def main():
         viewer.side_scroll.ensureWidgetVisible(viewer.details); viewer.details.verticalScrollBar().setValue(viewer.details.verticalScrollBar().maximum())
         events(); viewer.grab().save(str(workspace/f'{language}-equipment-details.png'))
     assert baseline==viewer.service.load(viewer.project_id,viewer.model['model_id'])['elements']
+    # Corrupt only the managed QA snapshot. A failed reload must clear the old
+    # scene and association controls instead of showing stale source evidence.
+    snapshot=viewer.service.root/viewer.project_id/'models'/viewer.model['model_id']/'source.osm'
+    original=snapshot.read_bytes()
+    try:
+        snapshot.write_bytes(original+b'\n! intentional QA corruption\n')
+        viewer.load_selected_model(); events()
+        assert errors and errors.pop()==tr('model_source_changed')
+        assert viewer.model is None and js('window.viewer.state().elements')==0
+        assert not viewer.export_button.isEnabled() and not viewer.confirm_button.isEnabled()
+    finally:
+        snapshot.write_bytes(original)
+    viewer.load_selected_model(); events()
+    until(lambda:js('window.viewer.state().elements')==len(baseline))
+    linked_object=viewer.events[-1]['object_id']
+    for row in range(viewer.objects.count()):
+        if viewer.objects.item(row).data(Qt.UserRole)==linked_object: viewer.objects.setCurrentRow(row); break
     context.settings.save(); project_id=context.current_project.project_id
     viewer.side_scroll.ensureWidgetVisible(viewer.open_equipment); events()
     QTest.mouseClick(viewer.open_equipment,Qt.LeftButton); events()
@@ -146,7 +166,8 @@ def main():
     assert not errors,errors
     report={'renderer':'Three.js / native QtWebEngine WebGL','model_hash':viewer.model['model_hash'],
         'elements':len(baseline),'unit':'m','camera_gestures':'PASS','raycast_selection':'PASS',
-        'category_filter':'PASS','explicit_reference':'PASS','restart':'PASS','captures':captures}
+        'category_filter':'PASS','explicit_reference':'PASS','offline_network_block':'PASS',
+        'stale_scene_isolation':'PASS','restart':'PASS','captures':captures}
     (workspace/'report.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
     print(json.dumps(report),flush=True)
 

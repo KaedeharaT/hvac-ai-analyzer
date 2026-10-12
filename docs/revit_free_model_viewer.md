@@ -1,9 +1,9 @@
 # Revit-free model preview: scope, evidence and operation
 
 The optional Model Viewer lives under Drawing Intelligence. It displays existing
-OpenStudio surface geometry and explicit equipment references. The Japanese UI
-and confirmed image-relative drawing overlays are released on `main`; this
-preview is developed separately on `feature/revit-free-model-viewer`.
+OpenStudio surface geometry and explicit equipment references. It is integrated
+with the Chinese, English and Japanese UI and the existing confirmed,
+image-relative drawing overlays. The renderer remains an optional dependency.
 
 ## Historical geometry audit
 
@@ -121,6 +121,13 @@ manifests and human association history are separate from original engineering
 inputs and from paper/GT/experiment artifacts. Re-importing identical source
 bytes preserves the association history.
 
+Units, geometry and engineering-validation status are derived from the checked
+source adapter; manifest fields cannot override them. Review history must match
+the project, model hash, object and coordinate metadata. A failed reload clears
+the previous scene and disables association/export controls, so a stale model
+cannot be presented under a different selected source. Closing the dialog
+releases its renderer.
+
 **Export provenance** writes a JSON record with source name, source/model hash,
 source format/version, adapter version, coordinate system, units, transform
 method, engineering-validation boundary, object identities, omissions and
@@ -167,6 +174,16 @@ npm ci --prefix tools/model_viewer --ignore-scripts
 npm run --prefix tools/model_viewer build
 ```
 
-The bundled Three.js license is shipped next to the assets. The original
+The bundled Three.js MIT and Earcut ISC licenses are shipped next to the assets;
+see the [third-party inventory](model_viewer_third_party.md) for optional Qt
+dependency terms. The original
 research assets, model weights, BEMS data, databases and temporary files are
 excluded from Git. No release tag is created or moved for this work.
+
+The public README screenshot is generated with
+`python scripts/capture_model_preview.py`. This helper creates a fictional
+33-surface OSM input and synthetic BEMS, exercises the real Qt/WebGL viewer,
+and copies only its native screenshot into `docs/images/model-viewer.png`.
+It accepts no historical input model. Generated OSM, BEMS and runtime records
+remain under ignored artifacts; the screenshot demonstrates software behavior,
+not a reconstructed or verified building.
