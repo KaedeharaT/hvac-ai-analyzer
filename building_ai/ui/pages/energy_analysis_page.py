@@ -280,6 +280,9 @@ class EnergyAnalysisPage(QWidget):
     def _quality_warning_text(warning: str) -> str:
         code = str(warning).split(":", 1)[0]
         keys = {
+            "timestamp_unavailable": "energy_reason_timestamp",
+            "duplicate_timestamps": "energy_reason_duplicate_time",
+            "energy_values_treated_as_interval_values": "energy_interval_values_review",
             "unknown_or_unsupported_energy_unit": "energy_warning_energy_unit",
             "unknown_or_unsupported_power_unit": "energy_warning_power_unit",
             "negative_energy": "energy_warning_negative_energy",
@@ -399,7 +402,11 @@ class EnergyAnalysisPage(QWidget):
     def _ensure_scope_dates(self) -> None:
         project_id = self.context.current_project.project_id if self.context.current_project else None
         bounds = self._dataset_bounds()
-        if not bounds: return
+        if not bounds:
+            for editor in (self.start_time, self.end_time, self.period_a_start, self.period_a_end, self.period_b_start, self.period_b_end):
+                editor.blockSignals(True); editor.setSpecialValueText("—"); editor.setDateTime(editor.minimumDateTime()); editor.blockSignals(False)
+            self._update_scope_control_state()
+            return
         start, end = bounds; midpoint = start + (end - start) / 2
         scope_key = (project_id, len(self.context.dataframe), start.isoformat(), end.isoformat())
         if scope_key == self._scope_project_id: return
@@ -408,16 +415,18 @@ class EnergyAnalysisPage(QWidget):
             for editor, value in ((self.start_time, start), (self.end_time, end),
                                   (self.period_a_start, start), (self.period_a_end, midpoint),
                                   (self.period_b_start, midpoint), (self.period_b_end, end)):
-                editor.blockSignals(True); editor.setDateTime(QDateTime(value.to_pydatetime())); editor.blockSignals(False)
+                editor.blockSignals(True); editor.setSpecialValueText(""); editor.setDateTime(QDateTime(value.to_pydatetime())); editor.blockSignals(False)
             self._scope_project_id = scope_key
         finally:
             self._updating_scope = False
         self._update_scope_control_state()
 
     def _update_scope_control_state(self) -> None:
-        custom = self.range.currentData() == "custom"
+        has_time = self._dataset_bounds() is not None
+        custom = has_time and self.range.currentData() == "custom"
         self.start_time.setEnabled(custom); self.end_time.setEnabled(custom)
-        enabled = self.compare_enabled.isChecked()
+        self.compare_enabled.setEnabled(has_time)
+        enabled = has_time and self.compare_enabled.isChecked()
         for widget in (self.period_a_label, self.period_b_label, self.period_a_start, self.period_a_end, self.period_b_start, self.period_b_end):
             widget.setEnabled(enabled)
             widget.setVisible(enabled)

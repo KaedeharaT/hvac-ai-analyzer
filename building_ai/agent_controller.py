@@ -108,8 +108,19 @@ class AgentController:
         summary = evidence.get("get_project_summary", {})
         if isinstance(summary, dict) and summary.get("data_available") is False:
             return "当前项目没有可读取的持久化数据。" if chinese else "The current project has no readable persisted data."
-        if equipment:
-            return self._grounded_fallback(equipment, chinese)
+        if equipment and any(token in text for token in ("额定负荷率", "rated load", "rated capacity", "定格負荷")):
+            diagnosis = self.context.diagnosis_result
+            kpis = diagnosis.analytics.equipment_kpis if diagnosis else []
+            kpi = next((item for item in kpis if item.equipment_name == equipment), None)
+            if kpi is None or kpi.load_mode != "rated_capacity":
+                return (f"{equipment}：无法计算额定负荷率，缺少有依据的额定制冷/制热容量。相对负荷不能当作额定负荷率。" if chinese else f"{equipment}: rated load ratio is unavailable without documented rated heating/cooling capacity. Relative load is not a rated load ratio.")
+        if equipment and any(token in text for token in ("能耗", "energy", "耗电", "consumption")):
+            energy = evidence.get("get_energy_summary", {})
+            if energy.get("equipment_filter") == equipment:
+                value = energy.get("summary", {}).get("total_energy_kwh")
+                if isinstance(value, (int, float)):
+                    return (f"{equipment}：当前项目 {energy.get('start')} ～ {energy.get('end')} 的能耗为 {value:.3f} kWh。来源：项目能源分析工具。" if chinese else f"{equipment}: {value:.3f} kWh from {energy.get('start')} to {energy.get('end')}. Source: current-project energy analysis tool.")
+                return (f"{equipment}：无法计算能耗，需要可靠的时间戳和已确认单位的功率或电量点位。" if chinese else f"{equipment}: energy is unavailable; reliable timestamps and power/energy signals with confirmed units are required.")
         if (("cop" in text or "能效比" in text) and any(token in text for token in ("最低", "最差", "lowest", "worst"))):
             return self._lowest_cop_answer(chinese)
         if any(token in text for token in ("节能机会", "节能方案", "节能建议", "energy saving", "saving opportunity", "opportunit")):
@@ -126,6 +137,8 @@ class AgentController:
                     for item in rows
                 )
             return self._general_engineering_fallback(chinese, project_data_unavailable=True)
+        if equipment:
+            return self._grounded_fallback(equipment, chinese)
         energy = evidence.get("get_energy_summary", {})
         equipment_rows = evidence.get("get_equipment_summary", [])
         if any(token in text for token in ("最近", "一周", "7天", "7d", "趋势", "trend")):
@@ -146,6 +159,7 @@ class AgentController:
                 lines.append(f"项目 {summary.get('project_name')}：已读取持久化数据，共 {summary.get('number_of_rows', 0)} 行、{summary.get('number_of_points', 0)} 个点位。")
                 names = summary.get("discovered_equipment", []); lines.append("设备：" + ("、".join(names) if names else "当前未发现可确认设备。"))
                 lines.append(f"时间范围：{summary.get('time_range', {}).get('start') or '—'} ～ {summary.get('time_range', {}).get('end') or '—'}；采样间隔：{summary.get('sampling_interval') or '—'}。")
+                lines.append("数据来源：" + "、".join(summary.get("imported_files", [])))
                 if any(token in text for token in ("可以分析什么", "分析什么", "available analysis", "what can be analyzed")):
                     labels = {
                         "temperature_trend": "温度趋势", "energy_consumption": "能耗", "power_trend": "功率趋势",
@@ -168,6 +182,7 @@ class AgentController:
         if isinstance(summary, dict):
             lines.append(f"Project {summary.get('project_name')}: persisted data is available with {summary.get('number_of_rows', 0)} rows and {summary.get('number_of_points', 0)} points.")
             lines.append("Equipment: " + (", ".join(summary.get("discovered_equipment", [])) or "no confirmed equipment."))
+            lines.append("Sources: " + ", ".join(summary.get("imported_files", [])))
         if isinstance(energy, dict) and energy.get("summary"):
             values = energy["summary"]; lines.append(f"Energy: total {values.get('total_energy_kwh') if values.get('total_energy_kwh') is not None else '—'} kWh; peak {values.get('peak_power_kw') if values.get('peak_power_kw') is not None else '—'} kW; average COP {values.get('average_cop') if values.get('average_cop') is not None else '—'}.")
         return "\n".join(lines) or "No current project analysis is available."
@@ -267,6 +282,8 @@ class AgentController:
                 lines = [f"根据当前项目的已验证分析结果，{kpi.equipment_name}：", f"- 状态：{'可用' if kpi.status == 'available' else '无法计算'}", f"- 有效样本：{kpi.valid_sample_count}"]
                 if kpi.status == "available":
                     lines += [f"- 平均 COP：{values('cop'):.2f}", f"- 平均 ΔT：{values('delta_t_c'):.2f}°C", f"- 平均流量：{values('flow_lps'):.2f} L/s", f"- 平均输入功率：{values('power_kw'):.2f} kW", f"- 平均热负荷：{values('thermal_load_kw'):.2f} kW"]
+                else:
+                    lines.append(f"- 无法计算的原因：{kpi.reason}")
                 related = [item for item in diagnosis.findings if item.equipment_id == kpi.equipment_id]
                 if related:
                     finding = related[0]; user = self.context.interpretation.interpret(finding, language="zh_CN")
@@ -282,6 +299,7 @@ class AgentController:
                 return "\n".join(lines)
             lines = [f"Validated result for {kpi.equipment_name}:", f"- Status: {'available' if kpi.status == 'available' else 'unavailable'}", f"- Valid samples: {kpi.valid_sample_count}"]
             if kpi.status == "available": lines += [f"- Average COP: {values('cop'):.2f}", f"- Average ΔT: {values('delta_t_c'):.2f} °C", f"- Average flow: {values('flow_lps'):.2f} L/s", f"- Average input power: {values('power_kw'):.2f} kW", f"- Average thermal load: {values('thermal_load_kw'):.2f} kW"]
+            else: lines.append(f"- Unavailable: {kpi.reason}")
             related = [item for item in diagnosis.findings if item.equipment_id == kpi.equipment_id]
             if related:
                 finding = related[0]; user = self.context.interpretation.interpret(finding, language="en_US")
@@ -290,22 +308,28 @@ class AgentController:
             return "\n".join(lines)
         findings = diagnosis.findings
         validation = diagnosis.consistency_validation.passed if diagnosis.consistency_validation else False
+        def metric_text(item, key):
+            value = item.metric_summary.get(key, {}).get("mean")
+            return f"{value:.2f}" if item.status == "available" and isinstance(value, (int, float)) else "—"
         if chinese:
             lines = [f"根据当前项目的已验证分析结果：一致性校验{'通过' if validation else '未通过'}。", f"共分析 {len(kpis)} 台设备；诊断发现 {len(findings)} 项；节能机会 {len(self.context.opportunities)} 项。"]
             for item in kpis:
                 metric = item.metric_summary
-                lines.append(f"- {item.equipment_name}：COP {metric.get('cop', {}).get('mean', 0):.2f}，ΔT {metric.get('delta_t_c', {}).get('mean', 0):.2f}°C，状态：{'可用' if item.status == 'available' else '无法计算'}。")
+                lines.append(f"- {item.equipment_name}：COP {metric_text(item, 'cop')}，ΔT {metric_text(item, 'delta_t_c')}°C，状态：{'可用' if item.status == 'available' else '无法计算：' + item.reason}。")
             for finding in findings:
                 evidence = finding.evidence[0].metric_value if finding.evidence else {}
                 lines.append(f"- {names.get(finding.equipment_id, finding.equipment_id)}：{tr(f'finding_{finding.finding_type}_title')}，低 ΔT 占比 {float(evidence.get('low_delta_t_ratio', 0)):.1%}。")
             return "\n".join(lines)
         lines = [f"Validated project summary: consistency validation {'passed' if validation else 'failed'}.", f"{len(kpis)} equipment analyzed; {len(findings)} findings; {len(self.context.opportunities)} opportunities."]
-        lines += [f"- {item.equipment_name}: COP {item.metric_summary.get('cop', {}).get('mean', 0):.2f}; ΔT {item.metric_summary.get('delta_t_c', {}).get('mean', 0):.2f} °C; {'available' if item.status == 'available' else 'unavailable'}." for item in kpis]
+        lines += [f"- {item.equipment_name}: COP {metric_text(item, 'cop')}; ΔT {metric_text(item, 'delta_t_c')} °C; {'available' if item.status == 'available' else 'unavailable: ' + item.reason}." for item in kpis]
         return "\n".join(lines)
 
     def _equipment_name(self, message: str) -> str | None:
+        explicit = normalize_equipment_id(message)
+        if explicit:
+            return explicit
         organization = getattr(self.context, "equipment_organization", None)
         candidates = [binding.equipment.name for binding in organization.heat_sources] if organization else []
         text = message.casefold()
-        matched = next((name for name in candidates if name.casefold() in text), None)
+        matched = next((name for name in sorted(candidates, key=len, reverse=True) if re.search(r"(?<![a-z0-9_-])" + re.escape(name.casefold()) + r"(?![a-z0-9_-])", text)), None)
         return matched or normalize_equipment_id(message)

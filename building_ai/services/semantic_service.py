@@ -46,15 +46,38 @@ class SemanticService:
         self, dataframe: pd.DataFrame, *, source_file: str | None = None,
         sheet: str | None = None, project_id: str = "<unbound-project>",
         backend: Literal["offline", "enhanced", "research", "legacy_c1c8"] = "offline",
+        column_units: dict[str, str] | None = None,
+        excluded_columns: list[str] | None = None,
+        require_unit_evidence: bool = False,
     ) -> AnalysisResult:
-        source_columns = {normalize_header(column): str(column) for column in dataframe.columns}
-        df = normalize_dataframe(dataframe)
+        source_frame = dataframe.drop(columns=excluded_columns or [], errors="ignore")
+        df = normalize_dataframe(source_frame)
+        # Unicode normalization may collapse two distinct source headers.
+        # Keep both signals and their original identities for ambiguity review.
+        source_columns = {}
+        unique_columns = []
+        for index, (column, original) in enumerate(zip(df.columns, source_frame.columns)):
+            key = str(column)
+            while key in source_columns:
+                key += f" [column {index + 1}]"
+            unique_columns.append(key)
+            source_columns[key] = str(original)
+        df.columns = unique_columns
         time_column = find_time_column(df)
         if time_column:
             df = df.drop(columns=[time_column])
         if backend == "legacy_c1c8":
             return self._run_legacy_c1c8(df, source_file, sheet, project_id)
-        result = self._run_product(df, source_file, sheet, project_id, source_columns, use_llm=backend in {"enhanced", "research"})
+        result = self._run_product(df, source_file, sheet, project_id, source_columns, use_llm=backend in {"enhanced", "research"}, column_units=column_units)
+        if require_unit_evidence:
+            for item in result.semantic_results:
+                if any(warning.startswith("engineering_unit_inferred_") for warning in item.physics_warnings):
+                    item.debug_metadata["unconfirmed_unit_suggestion"] = item.unit
+                    item.unit = None
+                    item.needs_review = True
+                    item.gate_status = "REVIEW"
+                    item.physics_warnings.append("unit_confirmation_required")
+                    result.unit_db[normalize_header(item.raw_name)] = {"unit": None, "confidence": 0.0}
         if time_column:
             result.warnings.append(f"timestamp_column_excluded:{time_column}")
         return result
@@ -62,6 +85,7 @@ class SemanticService:
     def _run_product(
         self, df: pd.DataFrame, source_file: str | None, sheet: str | None,
         project_id: str, source_columns: dict[str, str], *, use_llm: bool,
+        column_units: dict[str, str] | None = None,
     ) -> AnalysisResult:
         results: list[SemanticResult] = []
         role_dict: dict[str, str] = {}
@@ -70,7 +94,8 @@ class SemanticService:
         provider = self.llm_manager.get_provider() if use_llm else None
         for col in df.columns:
             original_name = source_columns.get(str(col), str(col))
-            point = parse_point(str(col))
+            supplied_unit = (column_units or {}).get(original_name)
+            point = parse_point(normalize_header(original_name), supplied_unit=supplied_unit)
             label, confidence, reason = deterministic_label(point)
             label, gate_reason = conservative_gate(label, str(col))
             if gate_reason:
@@ -106,6 +131,8 @@ class SemanticService:
                 "unit_confidence": unit_confidence, "gate_status": gate, "physics_warning": warnings,
                 "structured_evidence": point.to_dict(), "llm_prior": prior,
             }
+            if supplied_unit:
+                debug["imported_unit_evidence"] = {"unit": supplied_unit, "source": "workbook_unit_row"}
             item = SemanticResult(
                 raw_name=original_name, column=original_name, canonical_label=label,
                 point_id=make_point_id(project_id, source_file, sheet, original_name),

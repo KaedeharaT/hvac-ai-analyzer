@@ -150,14 +150,27 @@ class AgentService:
             rows.append(opportunity.to_dict() | {"equipment_name": names.get(opportunity.equipment_id)})
         return {"available": True, "opportunities": rows}
 
-    def get_energy_summary(self, project_id: str):
+    def _scoped_energy(self, project_id: str, equipment_name: str | None = None):
         state = self._state(project_id, True)
         result = state["energy"] if state else (self.energy_getter() if self.energy_getter else None)
+        if equipment_name and state and result:
+            from building_ai.services.energy_analysis_service import EnergyAnalysisService
+            organization = state["equipment"]
+            if not organization or equipment_name not in {item.name for item in organization.equipment}:
+                return None
+            result = EnergyAnalysisService().analyze(state["dataframe"], state["semantics"], project_id,
+                state["metadata"], organization, state["diagnosis"].analytics if state["diagnosis"] else None,
+                equipment_filter=equipment_name)
+        return result
+
+    def get_energy_summary(self, project_id: str, equipment_name: str | None = None):
+        result = self._scoped_energy(project_id, equipment_name)
+        if equipment_name and result is None:
+            return {"available": False, "equipment_found": False, "reason": "Equipment or its energy data is unavailable in this project."}
         return result.to_dict() if result else {"available": False, "reason": "Energy analysis has not been run for the current project."}
 
-    def get_energy_timeseries(self, project_id: str, chart: str = "energy_trend", range_key: str = "all"):
-        state = self._state(project_id, True)
-        result = state["energy"] if state else (self.energy_getter() if self.energy_getter else None)
+    def get_energy_timeseries(self, project_id: str, chart: str = "energy_trend", range_key: str = "all", equipment_name: str | None = None):
+        result = self._scoped_energy(project_id, equipment_name)
         if result is None: return {"available": False, "reason": "Energy analysis has not been run for the current project."}
         if chart not in result.charts: return {"available": False, "reason": "Current data cannot reliably provide this analysis."}
         payload = result.charts[chart]

@@ -11,7 +11,7 @@ from PyQt5.QtGui import QColor, QPainter, QPen
 from PyQt5.QtWidgets import (
     QAbstractItemView, QComboBox, QFileDialog, QFormLayout, QFrame, QGridLayout,
     QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget, QMessageBox,
-    QProgressBar, QPushButton, QScrollArea, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QTextEdit, QTreeWidget,
+    QApplication, QProgressBar, QPushButton, QScrollArea, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QTextEdit, QTreeWidget,
     QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -34,6 +34,18 @@ from building_ai.services.product_experience import AnalysisReportService, findi
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def project_task_running(widget) -> bool:
+    """Do not replace inputs underneath a live analysis or Agent tool call."""
+    window = widget.window()
+    for page in getattr(window, "pages", []):
+        for name in ("_analysis_worker", "_agent_worker", "_import_worker"):
+            worker = getattr(page, name, None)
+            if worker is not None and worker.isRunning():
+                window.statusBar().showMessage(tr("task_wait_before_change"))
+                return True
+    return False
 
 
 def display_code(prefix, value):
@@ -477,20 +489,31 @@ class ProjectsPage(BasePage):
         return item.data(Qt.UserRole) if item else None
 
     def create(self):
+        if project_task_running(self): return
         name, ok = QInputDialog.getText(self, tr("create_project"), tr("project_name"))
-        if ok and name.strip(): self.context.current_project = self.context.projects.create(name.strip()); self.refresh(); self.project_changed.emit()
+        if ok and name.strip():
+            project = self.context.projects.create(name.strip())
+            self.context.open_project(project.project_id)
+            self.refresh(); self.project_changed.emit()
 
     def open(self):
+        if project_task_running(self): return
         project_id = self.selected_id()
         if project_id: self.context.open_project(project_id); self.project_changed.emit()
 
     def rename(self):
+        if project_task_running(self): return
         project_id = self.selected_id()
         if project_id:
             name, ok = QInputDialog.getText(self, tr("rename_project"), tr("new_name"))
-            if ok and name.strip(): self.context.current_project = self.context.projects.rename(project_id, name.strip()); self.refresh(); self.project_changed.emit()
+            if ok and name.strip():
+                project = self.context.projects.rename(project_id, name.strip())
+                if self.context.current_project and self.context.current_project.project_id == project_id:
+                    self.context.current_project = project
+                self.refresh(); self.project_changed.emit()
 
     def delete(self):
+        if project_task_running(self): return
         project_id = self.selected_id()
         if project_id and QMessageBox.question(self, tr("delete_project"), tr("delete_project_confirm")) == QMessageBox.Yes:
             self.context.project_data.clear(project_id)
@@ -499,10 +522,27 @@ class ProjectsPage(BasePage):
             self.refresh(); self.project_changed.emit()
 
 
+class ImportWorker(QThread):
+    completed = pyqtSignal(object)
+    failed = pyqtSignal(object)
+
+    def __init__(self, context, path, sheet, mode, allow_duplicate=False):
+        super().__init__()
+        self.context, self.path, self.sheet = context, path, sheet
+        self.mode, self.allow_duplicate = mode, allow_duplicate
+
+    def run(self):
+        try:
+            self.completed.emit(self.context.import_data(self.path, self.sheet, mode=self.mode, allow_duplicate=self.allow_duplicate))
+        except Exception as exc:
+            self.failed.emit(exc)
+
+
 class DataPage(BasePage):
     data_changed = pyqtSignal()
     def __init__(self, context):
         super().__init__(context, "import_data")
+        self._import_worker = None
         buttons = QHBoxLayout(); self.import_button = QPushButton(); self.import_button.setObjectName("PrimaryButton"); self.replace_button = QPushButton(); self.clear_button = QPushButton(); self.clear_button.setObjectName("DangerButton")
         self.import_button.clicked.connect(lambda: self.import_file("add")); self.replace_button.clicked.connect(lambda: self.import_file("replace")); self.clear_button.clicked.connect(self.clear_data)
         for button in (self.import_button, self.replace_button, self.clear_button): buttons.addWidget(button)
@@ -517,21 +557,55 @@ class DataPage(BasePage):
             self.import_button.setText(tr("add_data")); self.replace_button.setText(tr("replace_data")); self.clear_button.setText(tr("clear_project_data")); self.refresh()
 
     def import_file(self, mode: str = "add"):
+        if project_task_running(self): return
         if not self.context.current_project: QMessageBox.warning(self, tr("no_project"), tr("no_project_message")); return
         if mode == "replace" and QMessageBox.question(self, tr("replace_data"), tr("replace_data_confirm"), QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes: return
         path, _ = QFileDialog.getOpenFileName(self, tr("import"), "", tr("data_file_filter"))
         if not path: return
-        sheets = self.context.importer.list_sheets(path); sheet = None
+        try:
+            sheets = self.context.importer.list_sheets(path)
+        except Exception as exc:
+            QMessageBox.warning(self, tr("import_error"), tr("import_failed", detail=str(exc))); return
+        sheet = None
         if len(sheets) > 1:
             choices = [*sheets, "__all__"]
             sheet, ok = QInputDialog.getItem(self, tr("worksheet"), tr("select_sheet"), choices, 0, False)
             if not ok: return
-        try:
-            result = self.context.import_data(path, sheet, mode=mode)
-        except DuplicateImportError:
+        self._start_import(path, sheet, mode)
+
+    def _start_import(self, path, sheet, mode, allow_duplicate=False):
+        if self._import_worker is not None: return
+        self._pending_import = (path, sheet, mode)
+        self._import_worker = ImportWorker(self.context, path, sheet, mode, allow_duplicate)
+        self._import_worker.completed.connect(self._import_completed)
+        self._import_worker.failed.connect(self._import_failed)
+        # Keep the active project stable while its managed cache is written.
+        self.window().centralWidget().setEnabled(False)
+        self.readiness.setText(tr("import_busy"))
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        self._import_worker.start()
+
+    def _finish_import(self):
+        worker = self._import_worker
+        if worker is not None:
+            worker.wait()
+            worker.deleteLater()
+        self._import_worker = None
+        self.window().centralWidget().setEnabled(True)
+        QApplication.restoreOverrideCursor()
+
+    def _import_failed(self, exc):
+        self._finish_import()
+        self.refresh()
+        if isinstance(exc, DuplicateImportError):
             duplicate = QMessageBox.question(self, tr("duplicate_import"), tr("duplicate_import_message"), QMessageBox.Yes | QMessageBox.No)
             if duplicate != QMessageBox.Yes: return
-            result = self.context.import_data(path, sheet, mode=mode, allow_duplicate=True)
+            self._start_import(*self._pending_import, allow_duplicate=True)
+        else:
+            QMessageBox.warning(self, tr("import_error"), tr("import_failed", detail=str(exc)))
+
+    def _import_completed(self, result):
+        self._finish_import()
         self.refresh()
         frame = result.dataframe.head(50); self.preview.setRowCount(len(frame)); self.preview.setColumnCount(len(frame.columns)); self.preview.setHorizontalHeaderLabels([str(c) for c in frame.columns])
         for row in range(len(frame)):
@@ -540,6 +614,7 @@ class DataPage(BasePage):
         self.data_changed.emit()
 
     def clear_data(self):
+        if project_task_running(self): return
         if not self.context.current_project: return
         if QMessageBox.question(self, tr("clear_project_data"), tr("clear_data_confirm"), QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes: return
         self.context.clear_project_data(); self.refresh(); self.data_changed.emit()
@@ -548,7 +623,7 @@ class DataPage(BasePage):
         if not hasattr(self, "metadata"): return
         project = self.context.current_project
         if not project:
-            self.metadata.setText(tr("no_project_message")); self.readiness.setText("○ " + tr("readiness_import")); return
+            self.metadata.setText(tr("no_project_message")); self.readiness.setText("○ " + tr("readiness_import")); self.preview.setRowCount(0); self.preview.setColumnCount(0); return
         if self.context.dataframe is None:
             self.metadata.setText(tr(self.context.data_notice or "no_project_data")); self.readiness.setText("○ " + tr("readiness_import")); self.preview.setRowCount(0); self.preview.setColumnCount(0); return
         info = self.context.import_metadata
@@ -560,6 +635,7 @@ class DataPage(BasePage):
             f"{tr('time_range')}: {project.time_range or '—'}",
             f"{tr('import_last_updated')}: {latest.get('imported_at') or '—'} · {tr('import_revision')}: {project.data_revision}",
         ]
+        summary.extend(tr(warning) for warning in info.get("warnings", []))
         self.metadata.setPlainText("\n".join(summary))
         semantics = self.context.semantic_result.semantic_results if self.context.semantic_result else []
         mapped = sum(item.status.value == "ACCEPT" for item in semantics); review = sum(item.status.value == "REVIEW" for item in semantics); abstained = sum(item.status.value == "ABSTAIN" for item in semantics)
@@ -575,24 +651,32 @@ class SemanticsPage(BasePage):
         super().__init__(context, "semantic_mapping")
         self.run_button = QPushButton(); self.run_button.setObjectName("PrimaryButton"); self.run_button.clicked.connect(self.run_analysis); self.layout.addWidget(self.run_button, alignment=Qt.AlignLeft)
         self.summary = QLabel(); self.summary.setObjectName("Muted"); self.layout.addWidget(self.summary)
-        self.table = QTableWidget(0, 10); self.setup_table(self.table); self.table.itemSelectionChanged.connect(self.show_details); self.layout.addWidget(self.table, 1)
-        review = QHBoxLayout(); self.label = QComboBox(); self.label.addItems(TAXONOMY); self.equipment_id = QLineEdit(); self.note = QLineEdit(); self.accept = QPushButton(); self.accept.setObjectName("PrimaryButton"); self.unknown = QPushButton()
+        self.table = QTableWidget(0, 10); self.setup_table(self.table); self.table.itemSelectionChanged.connect(self.show_details); self.table.currentCellChanged.connect(lambda *_: self.show_details()); self.layout.addWidget(self.table, 1)
+        review = QHBoxLayout(); self.label = QComboBox(); self.label.addItems(TAXONOMY); self.equipment_id = QLineEdit(); self.unit = QLineEdit(); self.unit.setMaximumWidth(85); self.note = QLineEdit(); self.accept = QPushButton(); self.accept.setObjectName("PrimaryButton"); self.unknown = QPushButton()
         self.accept.clicked.connect(self.save_review); self.unknown.clicked.connect(self.mark_unknown)
-        for widget in (self.label, self.equipment_id, self.note, self.accept, self.unknown): review.addWidget(widget)
+        for widget in (self.label, self.equipment_id, self.unit, self.note, self.accept, self.unknown): review.addWidget(widget)
         self.layout.addLayout(review); self.details = QTextEdit(); self.details.setReadOnly(True); self.details.setMaximumHeight(130); self.layout.addWidget(self.details); self.retranslate_ui()
 
     def retranslate_ui(self):
         super().retranslate_ui()
         if hasattr(self, "table"):
+            self.unit.setPlaceholderText(tr("unit")); self.unit.setToolTip(tr("unit_confirmation_required"))
             self.run_button.setText(tr("run_semantic")); self.table.setHorizontalHeaderLabels([tr("raw_point"), tr("canonical_label"), tr("device_type"), tr("equipment_id"), tr("physical_quantity"), tr("unit"), tr("confidence"), tr("validation"), tr("status"), tr("source")]); self.equipment_id.setPlaceholderText(tr("equipment_id")); self.note.setPlaceholderText(tr("review_note")); self.accept.setText(tr("confirm_mapping")); self.unknown.setText(tr("mark_unknown"))
             self.table.blockSignals(True); self.refresh(); self.table.blockSignals(False)
 
     def run_analysis(self):
+        if project_task_running(self): return
         if self.context.dataframe is None: QMessageBox.warning(self, tr("no_data"), tr("import_first")); return
         self.context.run_semantics(); self.refresh()
 
     def refresh(self):
         if not hasattr(self, "table"): return
+        project_id = self.context.current_project.project_id if self.context.current_project else None
+        changed_project = getattr(self, "_review_project_id", None) != project_id
+        self._review_project_id = project_id
+        blocked = self.table.blockSignals(True)
+        if changed_project:
+            self.table.clearSelection(); self.table.setCurrentCell(-1, -1)
         items = self.context.semantic_result.semantic_results if self.context.semantic_result else []; self.table.setRowCount(len(items))
         counts = {"ACCEPT": 0, "REVIEW": 0, "ABSTAIN": 0}
         for item in items: counts[item.status.value] = counts.get(item.status.value, 0) + 1
@@ -601,6 +685,9 @@ class SemanticsPage(BasePage):
             source = item.confirmation_source or item.debug_metadata.get("llm_prior", {}).get("source", "engineering_offline")
             values = [item.raw_name, item.effective_label, item.equipment_type or "", item.effective_equipment_id or "", item.physical_quantity or "", item.unit or "", "" if item.confidence is None else f"{item.confidence:.2f}", tr("validation_valid" if item.physical_validity else "validation_check"), display_code("status_", item.review_status), display_code("source_", source)]
             for col, value in enumerate(values): self.table.setItem(row, col, QTableWidgetItem(str(value)))
+        self.table.blockSignals(blocked)
+        if changed_project or not items:
+            self.show_details()
 
     def current_result(self):
         row = self.table.currentRow(); items = self.context.semantic_result.semantic_results if self.context.semantic_result else []; return items[row] if 0 <= row < len(items) else None
@@ -608,11 +695,16 @@ class SemanticsPage(BasePage):
     def show_details(self):
         item = self.current_result()
         if item:
+            self.unit.setText(item.unit or "")
+            self.note.setText(item.human_note or "")
             self.label.setCurrentText(item.effective_label); self.equipment_id.setText(item.effective_equipment_id or ""); self.details.setText(json.dumps({"reason": item.reason, "equipment_id": item.effective_equipment_id, "relation_confidence": item.relation_confidence, "physics_warnings": item.physics_warnings, "gate_status": item.gate_status, "suspicious": item.suspicious, "per_label_scores": item.per_label_scores}, indent=2, ensure_ascii=False, default=str))
+        else:
+            self.equipment_id.clear(); self.unit.clear(); self.note.clear(); self.details.clear(); self.label.setCurrentIndex(-1)
 
     def save_review(self):
+        if project_task_running(self): return
         item = self.current_result()
-        if item: self.context.save_review(item.point_id, self.label.currentText(), self.note.text(), self.equipment_id.text().strip() or None); self.refresh()
+        if item: self.context.save_review(item.point_id, self.label.currentText(), self.note.text(), self.equipment_id.text().strip() or None, unit=self.unit.text()); self.refresh()
 
     def mark_unknown(self): self.label.setCurrentText("other"); self.save_review()
 
@@ -680,6 +772,7 @@ class EquipmentPage(BasePage):
             self._render_detail()
         if not self.table.rowCount():
             self.detail_title.setText(tr("equipment_select"));
+            self.detail_meta.clear()
             for view in self.detail_views.values(): view.setPlainText(tr("run_semantics_first"))
 
     def apply_global_context(self):

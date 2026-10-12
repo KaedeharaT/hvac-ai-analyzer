@@ -115,8 +115,13 @@ def validate_analysis(
                     issues.append(ValidationIssue("chart_equipment_mismatch", f"{code} contains an unknown equipment", series.get("name")))
                 if not series.get("data"):
                     issues.append(ValidationIssue("empty_chart_series", f"{code} is marked available with no values", series.get("name")))
+        # Building meter/pump series need not have a complete heat-source KPI.
+        # Validate their ranking against its own project energy provenance.
+        energy_equipment = {series.equipment_name for series in
+                            [*energy.energy_series, *energy.power_series]
+                            if series.point_id and series.equipment_name}
         for item in energy.charts.get("equipment_ranking", {}).get("data", []):
-            if item.get("name") not in chart_equipment:
+            if item.get("name") not in energy_equipment:
                 issues.append(ValidationIssue("ranking_equipment_mismatch", "Energy ranking contains an unknown equipment", item.get("name")))
         mapping = {"energy_timeseries": "energy_consumption", "power_timeseries": "power_trend", "temperature_timeseries": "temperature_trend", "daily_load_profile": "daily_profile", "load_heatmap": "heatmap", "equipment_breakdown": "equipment_ranking"}
         for legacy, canonical in mapping.items():

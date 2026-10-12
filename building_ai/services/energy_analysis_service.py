@@ -106,7 +106,8 @@ class EnergyAnalysisService:
         no_capability = {x: False for x in self._capability_names()}
         if timestamps is None or scope_timestamps is None or scope_timestamps.empty:
             return EnergyAnalysisResult(project_id, None, None, None, quality, no_capability,
-                self._summary([], [], [], organization), {}, warnings=["timestamp_unavailable"],
+                self._summary([], [], [], organization),
+                {name: {"available": False, "reason": "timestamp_unavailable"} for name in self._capability_names()}, warnings=["timestamp_unavailable"],
                 aggregation=aggregation or "1h", equipment_filter=equipment_filter)
         names = {item.equipment_id: item.name for item in (organization.equipment if organization else [])}
         energy: list[EnergySeries] = []; power: list[EnergySeries] = []; temperatures: list[EnergySeries] = []; rejected_warnings: list[str] = []

@@ -95,7 +95,7 @@ class DrawingIntelligencePage(QWidget):
         registry=DrawingModelRegistry(self.context.settings.drawing_model_path); detector=YOLODrawingDetector(registry.get())
         try: rows=self.context.drawings.save_detections(self.context.current_project.project_id,self.drawing['drawing_id'],registry.get().model_id,detector.detect(self.drawing['managed_path']))
         except Exception as exc: QMessageBox.warning(self,tr("drawing_error"),tr("drawing_failure",detail=str(exc))); return
-        self.refresh_detections(rows)
+        self.refresh_detections()
     def refresh_detections(self,rows=None):
         if not self.drawing:return
         selected_id=self.selected()['detection_id'] if self.selected() else None

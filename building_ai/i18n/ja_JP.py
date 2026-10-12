@@ -1,6 +1,16 @@
 """Japanese UI terminology. Source measurements, IDs and research labels stay intact."""
 
 TRANSLATIONS = {
+    "energy_interval_values_review": "単調増加しない電力量を区間値として表示しています。研究利用前に、原資料で計量値の積算方式を確認してください。",
+    "task_wait_before_change": "処理の完了後にプロジェクト、データ、対応付けを変更してください。",
+    "unit_confirmation_required": "単位の根拠がありません。原資料を確認してから入力してください。空欄の場合、単位を必要とする計算は利用できません。",
+    "import_error": "インポート失敗",
+    "import_failed": "ファイルを読み込めません。形式、シート、文字コードを確認してください。詳細：{detail}",
+    "import_busy": "データを読み込んでいます。完了後にプロジェクトを切り替えてください。",
+    "import_metadata_rows_removed": "説明行・単位行を除外し、行位置と単位の根拠をインポート記録に保存しました。",
+    "import_date_required": "時刻のみが含まれています。時系列分析には日付が必要です。日付の自動補完は行っていません。",
+    "import_time_unavailable": "信頼できるタイムスタンプが見つかりません。時系列分析は利用できません。",
+    "task_wait_before_close": "処理が実行中です。完了後にアプリを閉じてください。",
     "app_name": "BuildingAI",
     "dashboard": "概要", "projects": "プロジェクト", "import_data": "データ取込",
     "semantic_mapping": "データ・意味付け", "equipment": "設備", "drawing_intelligence": "図面認識",

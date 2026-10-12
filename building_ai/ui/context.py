@@ -92,6 +92,7 @@ class ApplicationContext:
         project = self.projects.get(project_id)
         if not project:
             raise KeyError(project_id)
+        self.reset_project()
         self.current_project = project
         self.selected_equipment_id = None
         self.selected_finding_id = None
@@ -254,10 +255,20 @@ class ApplicationContext:
             source_file=self.import_metadata.get("source_file"),
             sheet=self.import_metadata.get("sheet"),
             project_id=self.current_project.project_id,
+            column_units={**self.import_metadata.get("column_units", {}), **self.import_metadata.get("confirmed_units", {})},
+            excluded_columns=self.import_metadata.get("temporal_columns"),
+            require_unit_evidence=True,
         )
+        for item in self.semantic_result.semantic_results:
+            if item.raw_name in self.import_metadata.get("confirmed_units", {}):
+                item.debug_metadata["imported_unit_evidence"] = {"unit": item.unit, "source": "human_review"}
         self.projects.save_semantics(
             self.current_project.project_id, self.semantic_result.semantic_results
         )
+        # Re-running the model must not replace project-local human ownership
+        # or label corrections with fresh machine candidates in the live UI.
+        self.semantic_result.semantic_results = self.projects.load_semantics(self.current_project.project_id)
+        self.semantic_result.role_dict = {item.raw_name: item.effective_label for item in self.semantic_result.semantic_results}
         self.equipment_organization = self.equipment_service.organize(
             self.current_project.project_id, self.semantic_result.semantic_results
         )
@@ -311,13 +322,19 @@ class ApplicationContext:
         emit("finalize", "completed", None, 1, 1)
         return self.diagnosis_result
 
-    def save_review(self, point_id: str, human_label: str, note: str, equipment_id: str | None = None):
+    def save_review(self, point_id: str, human_label: str, note: str, equipment_id: str | None = None, unit: str | None = None):
         if not self.current_project:
             raise RuntimeError("No current project")
         equipment_id = normalize_equipment_id(equipment_id) or equipment_id
         self.projects.save_review(self.current_project.project_id, point_id, human_label, note, equipment_id)
         item = self.projects.get_semantic(self.current_project.project_id, point_id)
         if item:
+            if unit is not None:
+                item.unit = unit.strip() or None
+                self.import_metadata.setdefault("confirmed_units", {})[item.raw_name] = item.unit
+                item.debug_metadata["human_unit_review"] = {"unit": item.unit, "note": note, "verified_at": item.verified_at}
+                self.projects.save_import_metadata(self.current_project.project_id, self.import_metadata)
+                self.projects.save_semantics(self.current_project.project_id, [item])
             item.human_verified = True; item.human_label = human_label; item.confirmed_equipment_id = equipment_id or item.equipment_id
             item.confirmed_label = human_label; item.confirmation_source = "human_confirmed"
             self.confirmed_mappings.save(self.current_project.project_id, item, note)

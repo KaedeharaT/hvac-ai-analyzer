@@ -95,6 +95,12 @@ The Assistant inherits the selected project, equipment, page, and finding contex
 
 ### Drawing Intelligence
 
+Multi-project import validation and known data limits are documented in the
+[native desktop functional test report](docs/full_functional_validation.md).
+CSV/XLSX imports retain explicit unit rows and timestamp provenance. Clock-only
+exports need a documented date before time-based analysis; inferred units remain
+pending until confirmed in Data & Semantics. Legacy XLS requires optional `xlrd`.
+
 The optional Ultralytics adapter loads a locally configured YOLOv8 detector for PNG, JPG, and JPEG drawings. The current legacy model vocabulary is limited to `aircon`, `baseline_mark`, and `window`; weights are not distributed with this repository.
 
 Bounding boxes and confidence values remain AI predictions until a person confirms or rejects them. Only a human-confirmed object can be manually associated with equipment and exposed to the Agent as project evidence. Detection does not infer equipment health, topology, or an automatic BEMS-to-drawing match.

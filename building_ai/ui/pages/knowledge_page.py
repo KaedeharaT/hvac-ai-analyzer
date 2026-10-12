@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import json
 
-from PyQt5.QtCore import Qt, QUrl
+from PyQt5.QtCore import Qt, QUrl, pyqtSlot
+from PyQt5 import sip
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (
     QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
@@ -202,7 +203,11 @@ class KnowledgeBasePage(QWidget):
         for column in range(columns): self.featured_grid.setColumnStretch(column, 1)
     def resizeEvent(self, event):  # noqa: N802
         super().resizeEvent(event); self._reflow_metrics(); self._reflow_featured()
+    @pyqtSlot()
     def retranslate_ui(self) -> None:
+        # A broadcast during closed-window teardown must not update deleted
+        # children. The native slot binds this connection to Qt object lifetime.
+        if sip.isdeleted(self) or sip.isdeleted(self.source_details): return
         self.search_heading.setText(tr("knowledge_search_heading")); self.query.setPlaceholderText(tr("knowledge_search_placeholder")); self.search_button.setText(tr("knowledge_search")); self.search_support.setText(tr("knowledge_search_support")); self.areas_header.title.setText(tr("knowledge_areas")); self.areas_header.subtitle.setText(tr("knowledge_areas_subtitle")); self.coverage_header.title.setText(tr("knowledge_coverage")); self.coverage_header.subtitle.setText(tr("knowledge_coverage_subtitle")); self.featured_header.title.setText(tr("knowledge_featured_sources")); self.featured_header.subtitle.setText(tr("knowledge_featured_subtitle")); self.browse_sources_button.setText(tr("knowledge_hide_sources") if self.source_browser.isVisible() else tr("knowledge_browse_sources")); self.source_browser_header.title.setText(tr("knowledge_sources")); self.source_browser_header.subtitle.setText(tr("knowledge_sources_intro")); self.source_url_button.setText(tr("knowledge_open_official")); self.source_table.setHorizontalHeaderLabels([tr("knowledge_organization"), tr("knowledge_source"), tr("knowledge_country"), tr("knowledge_category"), tr("knowledge_language")])
         for card in self.cards.values(): card.retranslate_ui()
         for card in self._featured_cards: card.retranslate_ui()

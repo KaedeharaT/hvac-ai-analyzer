@@ -176,6 +176,34 @@ class MainWindow(QMainWindow):
         provider_label = provider.display_name if provider.is_configured else tr("llm")
         self.llm_label.set_status(f"{provider_label} · {detail}", "success" if provider.is_configured and detail == tr("connected") else "warning" if not provider.is_configured else "critical")
 
+    def closeEvent(self, event):
+        for page in self.pages:
+            for name in ("_import_worker", "_analysis_worker", "_agent_worker"):
+                worker = getattr(page, name, None)
+                if worker is not None and worker.isRunning():
+                    self.statusBar().showMessage(tr("task_wait_before_close"))
+                    event.ignore()
+                    return
+        # Stop global language broadcasts before Qt tears down the children of
+        # a closed window. Python reference cycles can otherwise outlive them.
+        for target in [self, *self.pages]:
+            callback = getattr(target, "retranslate_ui", None)
+            if callback is not None:
+                try: self.i18n.language_changed.disconnect(callback)
+                except (TypeError, RuntimeError): pass
+        self._language_disconnected = True
+        super().closeEvent(event)
+
+    def showEvent(self, event):
+        if getattr(self, "_language_disconnected", False):
+            for target in [self, *self.pages]:
+                callback = getattr(target, "retranslate_ui", None)
+                if callback is not None:
+                    self.i18n.language_changed.connect(callback)
+                    callback()
+            self._language_disconnected = False
+        super().showEvent(event)
+
     def refresh_pages(self) -> None:
         for page in self.pages:
             if hasattr(page, "refresh"):

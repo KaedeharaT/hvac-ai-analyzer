@@ -25,7 +25,7 @@ class AgentRuntime:
             return Route(intent='drawing_query',confidence=.95,requires_project=True,requires_tools=True)
         if any(t in x for t in ('你是谁','who are you','你会什么','what can you do','introduce yourself','assistant are you','你能帮我')): return Route(intent='general_chat',confidence=.99,requires_project=False,requires_tools=False)
         if any(t in x for t in ('一般','冷冻水','hvac','暖通','delta t','δt','chilled water','chilled-water','pump','first checks','common hvac','part load')): return Route(intent='general_hvac_knowledge',confidence=.9,requires_project=False,requires_tools=False,requires_knowledge=True)
-        if any(t in x for t in ('project overview','project 7','项目目前','项目总览','project results')): intent='project_summary'
+        if any(t in x for t in ('project overview','project 7','项目目前','项目总览','project results','哪些设备','设备有哪些','what equipment','equipment list')): intent='project_summary'
         elif any(t in x for t in ('energy rise','higher energy')): intent='diagnosis'
         elif any(t in x for t in ('建议','机会','recommend','opportunit','improvement','improve first','improve it first','what should i improve','改善','应该先做什么','先做什么','先检查什么','quick win','save some energy','省点电','what should i do first','something simple','should look at first')): intent='recommendation'
         elif any(t in x for t in ('能耗','昨天','energy','power','electricity','consumption','load trend','demand','耗电','负荷趋势')): intent='energy_analysis'
@@ -50,11 +50,15 @@ class AgentRuntime:
             # Short follow-ups such as "what should I do first?" commonly
             # omit a pronoun.  Keep the conversation-scoped focus available
             # to the existing planner without changing general chat requests.
-            if equipment_id and equipment_id.casefold() not in q.casefold() and not any(token in q.casefold() for token in ('who are you','你是谁','what can you do','你会什么','哪些设备','设备有哪些','what equipment','equipment list')):
+            if equipment_id and self.context.agent_controller._equipment_name(q) is None and self.route(q).requires_project and not any(token in q.casefold() for token in ('who are you','你是谁','what can you do','你会什么','哪些设备','设备有哪些','what equipment','equipment list','当前项目','本项目','current project')):
                 q=f'{q} {equipment_id}'
         equipment=self.context.agent_controller._equipment_name(q)
         if equipment and pid: memory.put(pid,conversation_id,'focus','equipment',{'equipment_id':equipment})
         r=self.route(q); plan=self.plan(r,pid)
+        if equipment:
+            for step in plan.steps:
+                if step.tool in {'get_energy_summary','get_energy_timeseries','get_equipment_kpis','get_equipment_summary','get_diagnostic_findings','get_energy_opportunities'}:
+                    step.arguments['equipment_id'] = equipment
         if r.intent == 'drawing_query':
             plan = Plan(steps=[PlanStep(
                 tool='get_equipment_drawing_location' if equipment else 'get_drawing_summary',
@@ -101,7 +105,7 @@ class AgentRuntime:
             chinese = bool(re.search(r"[\u4e00-\u9fff]", q))
             named_equipment = self.context.agent_controller._equipment_name(q)
             if named_equipment:
-                answer = self.context.agent_controller._grounded_fallback(named_equipment, chinese)
+                answer = self.context.agent_controller._grounded_data_answer(q, named_equipment, chinese, evidence)
             elif any(token in q.casefold() for token in ('最低', '最差', 'lowest', 'worst')):
                 answer = self.context.agent_controller._lowest_cop_answer(chinese)
                 if chinese:

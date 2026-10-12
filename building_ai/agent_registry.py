@@ -24,5 +24,7 @@ class ToolRegistry:
             return self.knowledge.search(args.query,args.top_k)
         if not isinstance(args,ProjectArgs): raise TypeError(f'{name} requires ProjectArgs')
         payload={'project_id':args.project_id}
-        if args.equipment_id is not None: payload['equipment_id']=args.equipment_id
+        if args.equipment_id is not None:
+            key = 'equipment_name' if name in {'get_energy_summary','get_energy_timeseries','get_equipment_kpis','get_equipment_summary','get_diagnostic_findings','get_energy_opportunities'} else 'equipment_id'
+            payload[key]=args.equipment_id
         return self.tools.call(name,**payload)

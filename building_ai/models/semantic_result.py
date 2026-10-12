@@ -86,6 +86,8 @@ class SemanticResult:
 
     @property
     def status(self) -> SemanticStatus:
+        if (self.confirmed_label or (self.human_verified and self.human_label)) and self.effective_label != "other":
+            return SemanticStatus.ACCEPT
         if self.abstained or str(self.gate_status).upper() == "ABSTAIN":
             return SemanticStatus.ABSTAIN
         if self.needs_review or self.suspicious:
