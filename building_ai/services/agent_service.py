@@ -36,6 +36,13 @@ class AgentService:
         self.tools.register("get_drawing_detections", self.get_drawing_detections)
         self.tools.register("get_drawing_summary", self.get_drawing_summary)
         self.tools.register("get_equipment_drawing_location", self.get_equipment_drawing_location)
+        self.tools.register("get_retrofit_review", self.get_retrofit_review)
+
+    def get_retrofit_review(self, project_id: str, equipment_name: str | None = None):
+        from .retrofit_review_service import RetrofitReviewService
+        state=self._state(project_id)
+        if state is None: raise ValueError('Project context is required for a retrofit review.')
+        return RetrofitReviewService(self.drawings).build(state,equipment_name)
 
     def _state(self, project_id: str, require_analysis: bool = False) -> dict | None:
         return self.project_state_getter(project_id, require_analysis) if self.project_state_getter else None
@@ -201,6 +208,15 @@ class AgentService:
         self._state(project_id); return self.drawings.summary(project_id) if self.drawings else {"drawings": 0, "detections": 0, "review_status_counts": {}}
 
     def get_equipment_drawing_location(self, project_id: str, equipment_id: str):
-        self._state(project_id)
+        state=self._state(project_id)
+        requested_equipment=equipment_id
+        if state and state.get('equipment'):
+            equipment_id=next((e.equipment_id for e in state['equipment'].equipment if e.name==equipment_id),equipment_id)
         locations = self.drawings.equipment_location(project_id, equipment_id) if self.drawings else []
-        return {"equipment_id": equipment_id, "locations": locations, "reliable": bool(locations), "reason": None if locations else "No confirmed drawing association exists for this equipment."}
+        verified_objects = set()
+        if state and self.drawings:
+            from .retrofit_review_service import RetrofitReviewService
+            review = RetrofitReviewService(self.drawings).build(state, equipment_id)
+            verified_objects = {r['object_id'] for r in review['drawing_evidence']['associations'] if r['usable_as_identity_evidence']}
+        locations = [row for row in locations if row['detection_id'] in verified_objects]
+        return {"equipment_id": requested_equipment, "locations": locations, "reliable": bool(locations), "reason": None if locations else "No confirmed identity evidence and valid drawing source are available for this equipment."}

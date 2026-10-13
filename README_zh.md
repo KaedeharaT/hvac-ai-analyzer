@@ -5,6 +5,8 @@
 
 平台提供可选的离线模型预览，支持经过验证的 OpenStudio OSM 3.6.1/3.7.0 表面几何子集、人工设备引用及关联依据导出，无需安装 Revit。格式边界、安装方法与验证情况见[模型预览说明](docs/revit_free_model_viewer.md)。
 
+图纸页和诊断页提供“既有建筑节能建议”入口：整理已有运行诊断，分别显示设备级、建筑级改造的待评估清单，并导出依据。设备关联区分待核实、人工确认及测试引用；当前不生成完整改造设计或节能量预测。见[YOLO 资产接入与真实验证](docs/drawing_to_retrofit_asset_audit.md)和[博士研究路线](docs/drawing_to_retrofit_research_roadmap.md)。
+
 ### 面向建筑能源智能的 Agentic AI 平台
 
 将异构 BEMS 运行数据与建筑图纸统一转化为设备级能源分析、运行诊断和可追溯节能建议。

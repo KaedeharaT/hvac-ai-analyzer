@@ -1,7 +1,7 @@
 from __future__ import annotations
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QPen, QPixmap
-from PyQt5.QtWidgets import QComboBox, QFileDialog, QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsScene, QGraphicsTextItem, QGraphicsView, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox, QPushButton, QScrollArea, QFrame, QSplitter, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QComboBox, QFileDialog, QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsScene, QGraphicsTextItem, QGraphicsView, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPushButton, QScrollArea, QFrame, QSplitter, QVBoxLayout, QWidget
 from building_ai.i18n import LanguageManager, tr
 from building_ai.vision import DrawingModelRegistry, YOLODrawingDetector
 
@@ -23,6 +23,7 @@ class DrawingIntelligencePage(QWidget):
         root=QVBoxLayout(self); root.setContentsMargins(24,24,24,24)
         self.title=QLabel(); self.title.setObjectName("PageTitle"); root.addWidget(self.title); self.subtitle=QLabel(); self.subtitle.setObjectName("Muted"); self.subtitle.setWordWrap(True); root.addWidget(self.subtitle)
         self.boundary=QLabel(); self.boundary.setWordWrap(True); root.addWidget(self.boundary)
+        self.retrofit_button=QPushButton(); self.retrofit_button.clicked.connect(self.open_retrofit_review); root.addWidget(self.retrofit_button,alignment=Qt.AlignLeft)
         selector=QHBoxLayout(); self.drawing_label=QLabel(); self.drawing_choice=QComboBox(); self.drawing_choice.currentIndexChanged.connect(self.change_drawing); selector.addWidget(self.drawing_label); selector.addWidget(self.drawing_choice,1); self.export_button=QPushButton(); self.export_button.clicked.connect(self.export_positions); selector.addWidget(self.export_button); self.preview_button=QPushButton(); self.preview_button.clicked.connect(self.open_model_viewer); selector.addWidget(self.preview_button); root.addLayout(selector)
         bar=QHBoxLayout(); self.import_button=QPushButton(); self.model_button=QPushButton(); self.detect_button=QPushButton(); self.zoom_out=QPushButton("−"); self.fit=QPushButton("Fit"); self.zoom_in=QPushButton("+"); self.model_status=QLabel(); self.model_status.setObjectName("StatusBadge")
         for x in (self.import_button,self.model_button,self.detect_button,self.zoom_out,self.fit,self.zoom_in,self.model_status): bar.addWidget(x)
@@ -30,9 +31,21 @@ class DrawingIntelligencePage(QWidget):
         side=QWidget(); sidebox=QVBoxLayout(side); self.summary=QLabel(); self.summary.setWordWrap(True); self.list=QListWidget(); self.list.setMinimumHeight(120); self.class_choice=QComboBox(); self.class_choice.addItems(["aircon","baseline_mark","window"]); self.confirm=QPushButton(); self.reject=QPushButton(); self.map_equipment=QComboBox(); self.map_button=QPushButton(); self.open_equipment=QPushButton(); self.open_equipment.setObjectName("PrimaryButton"); self.open_equipment.clicked.connect(self.open_selected_equipment)
         self.review_label=QLabel(); self.mapping_label=QLabel(); self.evidence_note=QLabel(); self.evidence_note.setObjectName("Muted"); self.evidence_note.setWordWrap(True)
         for x in (self.summary,self.list,self.review_label,self.class_choice,self.confirm,self.reject,self.mapping_label,self.map_equipment,self.map_button,self.open_equipment,self.evidence_note): sidebox.addWidget(x)
+        self.association_status=QComboBox()
+        for value in ('pending','verified','test'): self.association_status.addItem('',value)
+        self.association_reviewer=QLineEdit(); self.association_note=QLineEdit()
+        self.association_reviewer.setMaxLength(120); self.association_note.setMaxLength(1000)
+        for widget in (self.association_status,self.association_reviewer,self.association_note):
+            sidebox.insertWidget(sidebox.indexOf(self.map_button),widget)
         self.review_scroll=QScrollArea(); self.review_scroll.setWidgetResizable(True); self.review_scroll.setFrameShape(QFrame.NoFrame); self.review_scroll.setMinimumWidth(280); self.review_scroll.setWidget(side); split.addWidget(self.review_scroll); split.setSizes([850,330]); root.addWidget(split,1)
         self.import_button.clicked.connect(self.import_drawing); self.model_button.clicked.connect(self.choose_model); self.detect_button.clicked.connect(self.detect); self.zoom_in.clicked.connect(lambda:self.viewer.scale(1.2,1.2)); self.zoom_out.clicked.connect(lambda:self.viewer.scale(.8,.8)); self.fit.clicked.connect(self.fit_view); self.list.currentRowChanged.connect(self.highlight); self.confirm.clicked.connect(lambda:self.review("confirmed")); self.reject.clicked.connect(lambda:self.review("rejected")); self.map_button.clicked.connect(self.map_selected); LanguageManager.instance().language_changed.connect(self.retranslate_ui); self.retranslate_ui()
     def retranslate_ui(self):
+        self.retrofit_button.setText(tr('retrofit_title'))
+        for index in range(self.association_status.count()):
+            self.association_status.setItemText(index,tr('retrofit_association_'+self.association_status.itemData(index)))
+        self.association_reviewer.setPlaceholderText(tr('retrofit_reviewer'))
+        self.association_note.setPlaceholderText(tr('retrofit_association_note'))
+        self.association_note.setToolTip(tr('retrofit_association_help'))
         for widget, key in ((self.title, "drawing_title"), (self.subtitle, "drawing_subtitle"),
                 (self.boundary, "drawing_boundary"), (self.import_button, "drawing_import"),
                 (self.model_button, "drawing_model"), (self.detect_button, "drawing_detect"),
@@ -48,6 +61,7 @@ class DrawingIntelligencePage(QWidget):
 
     def refresh(self):
         project=self.context.current_project
+        self.retrofit_button.setEnabled(bool(project))
         drawings=self.context.drawings.list_drawings(project.project_id) if project else []
         if self.drawing and self.drawing['drawing_id'] not in {d['drawing_id'] for d in drawings}:
             self.drawing=None; self.rows=[]; self.pix=None; self.scene.clear(); self.list.clear(); self.summary.clear(); self.map_equipment.clear(); self.evidence_note.setText(tr("drawing_evidence"))
@@ -93,7 +107,15 @@ class DrawingIntelligencePage(QWidget):
     def detect(self):
         if not self.drawing:return
         registry=DrawingModelRegistry(self.context.settings.drawing_model_path); detector=YOLODrawingDetector(registry.get())
-        try: rows=self.context.drawings.save_detections(self.context.current_project.project_id,self.drawing['drawing_id'],registry.get().model_id,detector.detect(self.drawing['managed_path']))
+        try:
+            import hashlib
+            from pathlib import Path
+            from importlib.metadata import version
+            predictions=detector.detect(self.drawing['managed_path'])
+            provenance={'weights_sha256':hashlib.sha256(Path(registry.get().model_path).read_bytes()).hexdigest(),
+                        'library':'ultralytics','library_version':version('ultralytics'),
+                        'classes':list(detector.get_classes()),'confidence_threshold':detector.confidence}
+            self.context.drawings.save_detections(self.context.current_project.project_id,self.drawing['drawing_id'],registry.get().model_id,predictions,model_provenance=provenance)
         except Exception as exc: QMessageBox.warning(self,tr("drawing_error"),tr("drawing_failure",detail=str(exc))); return
         self.refresh_detections()
     def refresh_detections(self,rows=None):
@@ -120,7 +142,8 @@ class DrawingIntelligencePage(QWidget):
         for r in self.rows:
             color=QColor(self.COLORS.get(r['class_name'].casefold(),"#7C3AED")); box=QGraphicsRectItem(r['bbox_x1'],r['bbox_y1'],r['bbox_x2']-r['bbox_x1'],r['bbox_y2']-r['bbox_y1']); box.setPen(QPen(color,3)); box.setData(0,r['detection_id']); self.scene.addItem(box)
             equipment=names.get(r.get('equipment_id')) if r.get('review_status')=='confirmed' else None
-            status=" · "+tr("drawing_attention" if r.get('equipment_id') in findings else "drawing_no_finding" if self.context.diagnosis_result else "drawing_no_diagnosis") if equipment else ""
+            association=self.context.drawings.association_record(self.context.current_project.project_id,r['drawing_id'],r['detection_id'])
+            status=" · "+tr("drawing_attention" if r.get('equipment_id') in findings else "drawing_no_finding" if self.context.diagnosis_result else "drawing_no_diagnosis") if equipment and association['association_status']=='verified' else " · "+tr('retrofit_association_'+association['association_status']) if equipment else ""
             text=QGraphicsTextItem(f"{r['reviewed_class'] or r['class_name']} {r['confidence']:.0%}" + (f" · {equipment}{status}" if equipment else "")); text.setData(0,r['detection_id']); text.setDefaultTextColor(color); text.setPos(r['bbox_x1'],r['bbox_y1']-20); self.scene.addItem(text)
     def highlight(self,index):
         if index>=0:
@@ -130,7 +153,14 @@ class DrawingIntelligencePage(QWidget):
                     row=next((r for r in self.rows if r['detection_id']==item.data(0)),None)
                     item.setPen(QPen(QColor('#F59E0B') if item.data(0)==target else QColor(self.COLORS.get(row['class_name'].casefold(),'#7C3AED')),5 if item.data(0)==target else 3))
             row=self.rows[index]
+            if getattr(self,'_association_object_id',None)!=row['detection_id']:
+                record=self.context.drawings.association_record(self.context.current_project.project_id,row['drawing_id'],row['detection_id'])
+                self.association_status.setCurrentIndex(max(0,self.association_status.findData(record['association_status'])))
+                self.association_reviewer.setText(record.get('reviewer','')); self.association_note.setText(record.get('evidence_note',''))
+                self._association_object_id=row['detection_id']
             self.evidence_note.setText(tr('drawing_position',x=f"{(row['bbox_x1']+row['bbox_x2'])/2:.1f}",y=f"{(row['bbox_y1']+row['bbox_y2'])/2:.1f}")+'\n'+tr('drawing_evidence'))
+        else:
+            self._association_object_id=None; self.association_reviewer.clear(); self.association_note.clear(); self.association_status.setCurrentIndex(0)
     def selected(self): return self.rows[self.list.currentRow()] if 0<=self.list.currentRow()<len(self.rows) else None
     def review(self,status):
         row=self.selected()
@@ -140,11 +170,15 @@ class DrawingIntelligencePage(QWidget):
             self.context.current_project.project_id, row['detection_id'], status,
             self.class_choice.currentText() if status == 'confirmed' else None,
         )
+        self._association_object_id=None
         self.refresh_detections()
     def map_selected(self):
         row=self.selected()
         if not row or not self.map_equipment.currentData():return
-        try:self.context.drawings.map_equipment(self.context.current_project.project_id,row['detection_id'],self.map_equipment.currentData())
+        if self.association_status.currentData()=='verified' and (not self.association_reviewer.text().strip() or not self.association_note.text().strip()):
+            QMessageBox.warning(self,tr('drawing_association'),tr('retrofit_association_help')); return
+        try:self.context.drawings.map_equipment(self.context.current_project.project_id,row['detection_id'],self.map_equipment.currentData(),
+            association_status=self.association_status.currentData(),reviewer=self.association_reviewer.text(),evidence_note=self.association_note.text())
         except ValueError as exc: QMessageBox.warning(self,tr("drawing_association"),tr("drawing_failure",detail=str(exc))); return
         self.refresh_detections()
     def open_selected_equipment(self):
@@ -162,3 +196,8 @@ class DrawingIntelligencePage(QWidget):
         from .model_viewer_dialog import ModelViewerDialog
         self.model_dialog = ModelViewerDialog(self.context, self)
         self.model_dialog.show()
+
+    def open_retrofit_review(self):
+        if not self.context.current_project:return
+        from .retrofit_review_dialog import RetrofitReviewDialog
+        self.retrofit_dialog=RetrofitReviewDialog(self.context,self); self.retrofit_dialog.show()

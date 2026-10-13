@@ -10,7 +10,7 @@ class ToolPermissionError(PermissionError): pass
 class ToolRegistry:
     names=('get_project_summary','get_analysis_results','get_energy_summary','get_energy_timeseries','get_temperature_summary','get_equipment_summary','get_equipment_kpis','get_diagnostic_findings','get_energy_opportunities','get_semantic_mapping','get_point_timeseries','list_project_drawings','get_drawing_detections','get_drawing_summary','get_equipment_drawing_location')
     def __init__(self, tools, knowledge=None, allowed_permissions=frozenset({Permission.READ_ONLY})):
-        self.tools=tools; self.knowledge=knowledge; self.allowed_permissions=frozenset(allowed_permissions); self.specs={n:ToolSpec(name=n,description=f'Formal BuildingAI read-only tool: {n}') for n in self.names}; self.specs['search_knowledge']=ToolSpec(name='search_knowledge',description='Search untrusted BuildingAI knowledge chunks')
+        self.tools=tools; self.knowledge=knowledge; self.allowed_permissions=frozenset(allowed_permissions); self.specs={n:ToolSpec(name=n,description=f'Formal BuildingAI read-only tool: {n}') for n in (*self.names,'get_retrofit_review')}; self.specs['search_knowledge']=ToolSpec(name='search_knowledge',description='Search untrusted BuildingAI knowledge chunks')
     def _authorize(self,name):
         spec=self.specs.get(name)
         if spec is None: raise KeyError(name)
@@ -25,6 +25,6 @@ class ToolRegistry:
         if not isinstance(args,ProjectArgs): raise TypeError(f'{name} requires ProjectArgs')
         payload={'project_id':args.project_id}
         if args.equipment_id is not None:
-            key = 'equipment_name' if name in {'get_energy_summary','get_energy_timeseries','get_equipment_kpis','get_equipment_summary','get_diagnostic_findings','get_energy_opportunities'} else 'equipment_id'
+            key = 'equipment_name' if name in {'get_energy_summary','get_energy_timeseries','get_equipment_kpis','get_equipment_summary','get_diagnostic_findings','get_energy_opportunities','get_retrofit_review'} else 'equipment_id'
             payload[key]=args.equipment_id
         return self.tools.call(name,**payload)

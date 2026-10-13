@@ -132,6 +132,7 @@ def main():
         return 0
     if args.reopen:
         previous = json.loads((workspace / 'report.json').read_text(encoding='utf-8'))
+        report = previous
         for entry in previous['projects']:
             if not entry.get('rows'): continue
             navigate('projects')
@@ -146,6 +147,9 @@ def main():
         from scripts.qa_functional_workflows import restore_spatial
         restored = restore_spatial(window, context, workspace, navigate, click, events) if manifest.get('workflows') else {'projects': 'PASS', 'manual_reviews': 'PASS'}
         restored['language'] = settings.language
+        if manifest.get('retrofit_review'):
+            from scripts.qa_drawing_retrofit import exercise_retrofit
+            exercise_retrofit(window, context, manifest, workspace, report, navigate, click, events, answers, save, reopen=True)
         (workspace / 'reopen.json').write_text(json.dumps(restored, indent=2), encoding='utf-8')
         window.close(); events()
         assert not report['exceptions'], 'Unhandled Qt exception; see report.json'
@@ -237,6 +241,9 @@ def main():
     if manifest.get('workflows'):
         from scripts.qa_functional_workflows import exercise
         exercise(window, context, manifest, workspace, report, navigate, click, events, answers, save)
+    if manifest.get('retrofit_review'):
+        from scripts.qa_drawing_retrofit import exercise_retrofit
+        exercise_retrofit(window, context, manifest, workspace, report, navigate, click, events, answers, save)
     settings.save()
     window.close()
     events()

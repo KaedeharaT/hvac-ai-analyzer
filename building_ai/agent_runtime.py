@@ -12,7 +12,7 @@ from building_ai.knowledge import KnowledgeService
 from building_ai.security import contains_prompt_injection, find_untrusted_instruction_paths
 
 class Route(BaseModel):
-    intent: Literal['general_chat','general_hvac_knowledge','project_summary','energy_analysis','equipment_analysis','diagnosis','recommendation','knowledge_search','drawing_query']
+    intent: Literal['general_chat','general_hvac_knowledge','project_summary','energy_analysis','equipment_analysis','diagnosis','recommendation','knowledge_search','drawing_query','retrofit_review']
     confidence: float; requires_project: bool; requires_tools: bool; requires_knowledge: bool=False
 class PlanStep(BaseModel): tool:str; arguments:dict; purpose:str
 class Plan(BaseModel): steps:list[PlanStep]
@@ -21,6 +21,8 @@ class AgentRuntime:
     def __init__(self,context): self.context=context
     def route(self,q:str)->Route:
         x=q.casefold()
+        if any(t in x for t in ('节能改造','既有建筑节能','retrofit review','retrofit advice','existing-building energy advice','省エネルギー改修','既存建築物の省エネルギー')):
+            return Route(intent='retrofit_review',confidence=.95,requires_project=True,requires_tools=True)
         if any(t in x for t in ('图纸', 'drawing', 'floor plan', 'where is')):
             return Route(intent='drawing_query',confidence=.95,requires_project=True,requires_tools=True)
         if any(t in x for t in ('你是谁','who are you','你会什么','what can you do','introduce yourself','assistant are you','你能帮我')): return Route(intent='general_chat',confidence=.99,requires_project=False,requires_tools=False)
@@ -55,9 +57,11 @@ class AgentRuntime:
         equipment=self.context.agent_controller._equipment_name(q)
         if equipment and pid: memory.put(pid,conversation_id,'focus','equipment',{'equipment_id':equipment})
         r=self.route(q); plan=self.plan(r,pid)
+        if r.intent=='retrofit_review':
+            plan=Plan(steps=[PlanStep(tool='get_retrofit_review',arguments={'project_id':pid},purpose='retrofit_review')])
         if equipment:
             for step in plan.steps:
-                if step.tool in {'get_energy_summary','get_energy_timeseries','get_equipment_kpis','get_equipment_summary','get_diagnostic_findings','get_energy_opportunities'}:
+                if step.tool in {'get_energy_summary','get_energy_timeseries','get_equipment_kpis','get_equipment_summary','get_diagnostic_findings','get_energy_opportunities','get_retrofit_review'}:
                     step.arguments['equipment_id'] = equipment
         if r.intent == 'drawing_query':
             plan = Plan(steps=[PlanStep(
@@ -85,6 +89,10 @@ class AgentRuntime:
             answer=f'I cannot provide a reliable project answer: {abstention_reason}.'
         elif not plan.steps:
             answer=self.context.agent_controller.answer(q,llm_event=llm_calls.append)
+        elif r.intent=='retrofit_review':
+            from building_ai.services.retrofit_review_renderer import render_review
+            from building_ai.agent_controller import response_language
+            answer=render_review(evidence['get_retrofit_review'],response_language(q))
         elif r.intent == 'drawing_query':
             location = evidence.get('get_equipment_drawing_location', {})
             if location.get('reliable'):

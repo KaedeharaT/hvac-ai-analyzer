@@ -5,6 +5,8 @@ Confirmed drawing objects support clickable equipment overlays and structured im
 
 An optional offline Model Viewer displays a validated subset of existing OpenStudio OSM 3.6.1/3.7.0 surface geometry, with manual equipment references and provenance export. It requires no Revit installation; see [supported formats, setup and verification](docs/revit_free_model_viewer.md).
 
+Drawing and Diagnostics now offer an **Existing-building energy advice** entry: existing diagnostic actions, separate equipment/building assessment checklists, and evidence export. Equipment links distinguish candidates, evidenced human confirmation and test references. This preliminary review does not produce a complete retrofit design or savings estimate. See the [YOLO asset audit and native validation](docs/drawing_to_retrofit_asset_audit.md) and [research roadmap](docs/drawing_to_retrofit_research_roadmap.md) (Chinese).
+
 ### Agentic AI Platform for Building Energy Intelligence
 
 Turn heterogeneous BEMS data and building drawings into equipment-aware analytics, diagnostics, and evidence-grounded energy-saving recommendations.

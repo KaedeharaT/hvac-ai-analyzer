@@ -905,6 +905,7 @@ class AnalyticsPage(BasePage):
         self.export_md = QPushButton(); self.export_html = QPushButton(); self.export_md.clicked.connect(lambda: self.export_report("md")); self.export_html.clicked.connect(lambda: self.export_report("html")); controls.addWidget(self.export_md); controls.addWidget(self.export_html)
         self.layout.addLayout(controls)
         self.progress_panel = AnalysisProgressPanel(); self.progress_panel.hide(); self.layout.addWidget(self.progress_panel)
+        self.retrofit_button=QPushButton(); self.retrofit_button.clicked.connect(self.open_retrofit_review); self.layout.addWidget(self.retrofit_button,alignment=Qt.AlignLeft)
         self.empty_state = QLabel(); self.empty_state.setObjectName("Muted"); self.empty_state.setAlignment(Qt.AlignCenter); self.empty_state.setWordWrap(True); self.empty_state.setMinimumHeight(160); self.layout.addWidget(self.empty_state)
         self.tabs = QTabWidget(); self.layout.addWidget(self.tabs, 1)
         self.overview = QWidget(); overview_layout = QVBoxLayout(self.overview); overview_layout.setContentsMargins(0, 0, 0, 0); overview_layout.setSpacing(SPACING_MD)
@@ -990,6 +991,7 @@ class AnalyticsPage(BasePage):
             self.type_filter.setToolTip(tr("diagnostics_finding_type")); self.export_md.setText(tr("diagnostics_export_markdown")); self.export_html.setText(tr("diagnostics_export_html")); self.finding_ask_ai.setText(tr("equipment_ask_ai"))
             self.finding_table.setHorizontalHeaderLabels([tr("equipment"), tr("diagnostics_finding_column"), tr("status"), tr("analysis_period"), tr("analysis_evidence")])
             self.tabs.setTabText(0, tr("analysis_overview")); self.tabs.setTabText(1, tr("analysis_kpi")); self.tabs.setTabText(2, tr("analysis_findings")); self.tabs.setTabText(3, tr("diagnostics_passed_checks")); self.tabs.setTabText(4, tr("analysis_opportunities"))
+            self.retrofit_button.setText(tr('retrofit_title'))
             for card in self.summary_cards.values(): card.retranslate_ui()
             for title in self.findChildren(QLabel):
                 if title.property("title_key"): title.setText(tr(title.property("title_key")))
@@ -1007,6 +1009,11 @@ class AnalyticsPage(BasePage):
         self._analysis_worker.analysis_failed.connect(self._analysis_failed)
         self._analysis_worker.finished.connect(self._analysis_worker_finished)
         self._analysis_worker.start()
+
+    def open_retrofit_review(self):
+        if not self.context.current_project:return
+        from .retrofit_review_dialog import RetrofitReviewDialog
+        self.retrofit_dialog=RetrofitReviewDialog(self.context,self); self.retrofit_dialog.show()
 
     def _analysis_finished(self, summary: dict):
         self.progress_panel.complete(summary); self.refresh()
